@@ -3,6 +3,7 @@ node_modules/
 
 # 构建产物
 dist/
+dist-release/
 *.exe
 *.exe.blockmap
 *.nsis.7z
@@ -37,3 +38,7 @@ Thumbs.db
 .env
 .env.local
 *.token
+
+# electron-builder 缓存（绕过沙箱限制写到项目内）
+.electron-cache/
+.app-builder/
