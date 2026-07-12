@@ -1,7 +1,7 @@
 {
   "name": "ai-writing-tool",
   "version": "1.0.0",
-  "description": "AI 写小说工具",
+  "description": "AI Writing Tool",
   "main": "main-electron.js",
   "scripts": {
     "start": "electron .",
@@ -10,7 +10,8 @@
   },
   "build": {
     "appId": "com.aiwriting.tool",
-    "productName": "AI写作工具",
+    "productName": "AI Writing Tool",
+    "artifactName": "${productName}-setup-${version}.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -33,7 +34,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "AI写作工具"
+      "shortcutName": "AI Writing Tool"
     },
     "publish": {
       "provider": "github",
