@@ -1,6 +1,6 @@
 {
   "name": "ai-writing-tool",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI Writing Tool",
   "main": "main-electron.js",
   "scripts": {

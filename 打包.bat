@@ -1,92 +1,111 @@
 @echo off
-chcp 65001 >nul
+setlocal
+
 echo ========================================
-echo   AI写作工具 - 打包发布脚本
+echo   AI Writing Tool - Build & Release
 echo ========================================
 echo.
 
 cd /d "%~dp0"
 
-echo [1/5] 设置环境变量...
-:: 使用项目内的缓存目录，避免权限问题
+where node >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [ERROR] Node.js not found. Please install Node.js first.
+    echo Download: https://nodejs.org/
+    echo.
+    pause
+    exit /b 1
+)
+
+where npm >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [ERROR] npm not found. Please reinstall Node.js.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo [Step 1/5] Configuring environment...
 set ELECTRON_CACHE=%~dp0.electron-cache
 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
 set PATH=C:\Windows\System32\WindowsPowerShell\v1.0;%PATH%
 
-:: 从 .env 文件读取 GitHub Token
 if exist "%~dp0.env" (
-    for /f "tokens=1,2 delims==" %%a in (%~dp0.env) do (
-        if "%%a"=="GH_TOKEN" set GH_TOKEN=%%b
+    for /f "tokens=1,* delims==" %%i in ('type "%~dp0.env"') do (
+        if "%%i"=="GH_TOKEN" set "GH_TOKEN=%%j"
     )
-    echo GitHub Token: 已从 .env 文件读取
+    echo GitHub Token: loaded from .env
 ) else (
-    echo GitHub Token: 未找到 .env 文件
+    echo GitHub Token: .env file not found
 )
 
 echo.
-echo 选择操作:
-echo   1. 仅打包（本地测试用）
-echo   2. 打包并发布到GitHub（自动更新推送）
+echo Choose action:
+echo   1. Build only (local test)
+echo   2. Build and release to GitHub (auto-update)
 echo.
-set /p choice="请输入选项 (1/2): "
+set /p choice="Enter choice (1/2): "
 
-if "%choice%"=="1" (
-    echo.
-    echo [2/5] 清理旧的构建产物...
-    if exist "%~dp0dist" rmdir /s /q "%~dp0dist" 2>nul
-    echo [3/5] 开始打包...
-    call npx electron-builder --win
-    goto :check_result
-)
+if "%choice%"=="1" goto :build_local
+if "%choice%"=="2" goto :build_release
 
-if "%choice%"=="2" (
-    if "%GH_TOKEN%"=="" (
-        echo.
-        echo [错误] 未配置 GitHub Token！
-        echo 请在项目根目录创建 .env 文件，内容为:
-        echo   GH_TOKEN=ghp_你的token
-        echo.
-        pause
-        exit /b 1
-    )
-    echo.
-    echo [2/5] 清理旧的构建产物...
-    if exist "%~dp0dist" rmdir /s /q "%~dp0dist" 2>nul
-    echo [3/5] 开始打包并发布到 GitHub...
-    call npx electron-builder --win --publish always
-    goto :check_result
-)
-
-echo 无效选项
+echo Invalid choice
 pause
 exit /b 1
+
+:build_local
+echo.
+echo [Step 2/5] Cleaning old build...
+if exist "%~dp0dist" rmdir /s /q "%~dp0dist"
+echo [Step 3/5] Building...
+call npm run build
+goto :check_result
+
+:build_release
+if "%GH_TOKEN%"=="" (
+    echo.
+    echo [ERROR] GitHub Token not configured!
+    echo Create a .env file in the project root with:
+    echo   GH_TOKEN=ghp_your_token_here
+    echo.
+    pause
+    exit /b 1
+)
+echo.
+echo [Step 2/5] Cleaning old build...
+if exist "%~dp0dist" rmdir /s /q "%~dp0dist"
+echo [Step 3/5] Building and releasing to GitHub...
+call npm run release
+goto :check_result
 
 :check_result
 if %ERRORLEVEL% EQU 0 (
     echo.
-    echo [4/5] 打包成功！
-    echo 安装包位置: dist\AI写作工具 Setup *.exe
-    echo 免安装版位置: dist\win-unpacked\AI写作工具.exe
+    echo [Step 4/5] Build success!
+    echo Installer: dist\AI Writing Tool Setup *.exe
+    echo Portable:  dist\win-unpacked\AI Writing Tool.exe
     echo.
     if "%choice%"=="2" (
-        echo [5/5] 已发布到 GitHub Releases！
-        echo 用户启动应用时会自动检测到新版本并提示更新。
+        echo [Step 5/5] Released to GitHub Releases!
+        echo Users will get auto-update prompt on app start.
         echo.
-        echo 查看发布: https://github.com/xingling80/Ai-writing-tool/releases
+        echo View: https://github.com/xingling80/Ai-writing-tool/releases
     ) else (
-        echo [5/5] 提醒: 发布前需修改 package.json 中的 version 字段
+        echo [Step 5/5] Remember to bump version in package.json before release
     )
     echo.
 ) else (
     echo.
-    echo [错误] 打包失败，请检查错误信息。
+    echo [ERROR] Build failed. Check error messages above.
     echo.
-    echo 常见问题:
-    echo   1. 网络超时 - 确保能访问 github.com 或使用代理
-    echo   2. 文件被占用 - 关闭正在运行的 AI写作工具
-    echo   3. Token 无效 - 检查 .env 中的 GH_TOKEN 是否正确
+    echo Common issues:
+    echo   1. Network timeout - check proxy or internet connection
+    echo   2. File in use - close AI Writing Tool before building
+    echo   3. Invalid token - check GH_TOKEN in .env
+    echo   4. Missing deps - run "npm install" first
 )
 
 echo.
 pause
+endlocal

@@ -3096,8 +3096,7 @@
     var optionsContainer = popup.querySelector('.flex.flex-col');
     if (!optionsContainer) return;
 
-    var existingOptions = optionsContainer.querySelectorAll('.ai-model-option');
-    existingOptions.forEach(function(opt) { opt.remove(); });
+    optionsContainer.innerHTML = '';
 
     var modelNames = Object.keys(config);
     if (modelNames.length === 0) {
