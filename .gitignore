@@ -32,3 +32,8 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.bak
+
+# 敏感信息（GitHub Token 等，仅本机使用，切勿提交）
+.env
+.env.local
+*.token
