@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作品管理</title>
+    <link rel="stylesheet" href="../css/theme.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--color-background);
+    --color-foreground: var(--color-foreground);
+    --color-card: var(--color-card);
+    --color-primary: var(--color-primary);
+    --color-muted-foreground: var(--color-muted-foreground);
+    --color-accent: var(--color-accent);
+    --color-border: var(--color-border);
+  }
+  @layer base {
+    body { background: var(--color-background); color: var(--color-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+    </style>
+</head>
+<body>
+<!-- Side Nav Panel (single column, no activity rail) -->
+<div class="flex h-full">
+  <div
+    class="flex flex-col w-[220px] h-full flex-shrink-0"
+    style="background: var(--bg-base-secondary);"
+  >
+    <!-- App Title -->
+    <div class="flex items-center gap-2 px-4 flex-shrink-0" style="height: 56px;">
+      <img src="../assets/icons/dl-builtin-trae/scroll-text.svg" width="20" height="20" alt="" style="color: var(--icon-brand);" class="opacity-100">
+      <span
+        class="font-semibold select-none"
+        style="font-size: var(--heading-sm-font-size); color: var(--text-default);"
+      >AI 写小说</span>
+    </div>
+
+    <!-- Nav Items -->
+    <nav class="flex flex-col gap-0.5 px-2 mt-1" data-nav-container>
+            <div
+        data-nav-key="editor"
+        data-dom-id="nav-editor"
+        class="flex items-center gap-3 px-3 rounded-md cursor-pointer"
+        style="height: 36px; color: var(--text-secondary); font-size: var(--body-base-font-size); line-height: var(--body-base-line-height);"
+      >
+        <img src="../assets/icons/dl-builtin-trae/file-text.svg" width="18" height="18" alt="" class="opacity-60">
+        <span>章节编辑器</span>
+      </div>
+
+      <div
+        data-nav-key="works"
+        data-dom-id="nav-works" data-active="true"
+        class="flex items-center gap-3 px-3 rounded-md cursor-pointer"
+        style="height: 36px; color: var(--text-secondary); font-size: var(--body-base-font-size); line-height: var(--body-base-line-height);"
+      >
+        <img src="../assets/icons/dl-builtin-trae/layout.svg" width="18" height="18" alt="" class="opacity-60">
+        <span>作品管理</span>
+      </div>
+
+      <div
+        data-nav-key="materials"
+        data-dom-id="nav-materials"
+        class="flex items-center gap-3 px-3 rounded-md cursor-pointer"
+        style="height: 36px; color: var(--text-secondary); font-size: var(--body-base-font-size); line-height: var(--body-base-line-height);"
+      >
+        <img src="../assets/icons/dl-builtin-trae/layers.svg" width="18" height="18" alt="" class="opacity-60">
+        <span>创作素材库</span>
+      </div>
+    </nav>
+
+    <!-- Divider -->
+    <div class="mx-3 mt-4" style="border-top: 1px solid var(--border-neutral-l1);"></div>
+
+    <!-- Spacer -->
+    <div class="flex-1"></div>
+
+    <!-- Bottom Section -->
+    <div class="flex flex-col gap-2 px-3 pb-4">
+      <!-- New Work Button -->
+      <button
+        data-dom-id="nav-new-work"
+        class="flex items-center justify-center gap-2 w-full rounded-md cursor-pointer"
+        style="
+          height: 34px;
+          background: var(--bg-brand);
+          color: var(--text-onbrand);
+          font-size: var(--body-base-font-size);
+          line-height: var(--body-base-line-height);
+          border: none;
+        "
+      >
+        <img src="../assets/icons/dl-builtin-trae/plus.0c0c0d.svg" width="16" height="16" alt="">
+        <span>新建作品</span>
+      </button>
+
+      <!-- Current Work -->
+      <div class="flex flex-col gap-1 px-1 mb-2">
+        <span style="font-size: 11px; color: var(--text-tertiary);">当前作品</span>
+        <span
+          class="truncate"
+          style="font-size: var(--body-base-font-size); color: var(--text-secondary); line-height: var(--body-base-line-height);"
+        >未选择</span>
+      </div>
+
+      <!-- Bottom Divider -->
+      <div style="border-top: 1px solid var(--border-neutral-l1);"></div>
+
+      <!-- AI Model Selector -->
+      <div class="relative" id="ai-model-wrapper">
+        <div
+          id="ai-model-trigger"
+          class="flex items-center gap-2.5 px-1 py-1.5 cursor-pointer rounded-md"
+          style="color: var(--text-secondary); font-size: 13px;"
+        >
+          <img src="../assets/icons/dl-builtin-trae/sparkles.32f08c.svg" width="16" height="16" alt="" class="flex-shrink-0">
+          <div class="flex flex-col min-w-0 flex-1">
+            <span style="font-size: 11px; color: var(--text-tertiary); line-height: 1.2;">AI 模型</span>
+            <span id="ai-model-name" style="font-size: 13px; color: var(--text-default); line-height: 1.3;" class="truncate">未配置</span>
+          </div>
+          <img src="../assets/icons/dl-builtin-trae/chevron-up.svg" width="12" height="12" alt="" class="opacity-40 flex-shrink-0">
+        </div>
+
+        <!-- Model Selector Popup -->
+        <div
+          id="ai-model-popup"
+          class="absolute left-0 right-0 hidden"
+          style="
+            bottom: calc(100% + 8px);
+            background: var(--bg-base-tertiary);
+            border: 1px solid var(--border-neutral-l2);
+            border-radius: var(--radius-lg);
+            padding: var(--spacer-8) 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            z-index: 100;
+            min-width: 220px;
+          "
+        >
+          <!-- Section: Current Model -->
+          <div class="px-3 pt-1 pb-1">
+            <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px;">当前可用</span>
+          </div>
+
+          <!-- Model Options -->
+          <div class="flex flex-col py-0.5"> </div>
+          <div class="mx-3 my-1.5" style="border-top: 1px solid var(--border-neutral-l1);"></div>
+
+          <!-- Add Custom API -->
+          <div
+            id="add-api-trigger"
+            class="flex items-center gap-2.5 px-3 py-1.5 mx-1 cursor-pointer rounded-md"
+            style="height: 36px; color: var(--text-brand); font-size: 13px;"
+          >
+            <img src="../assets/icons/dl-builtin-trae/plus.svg" width="14" height="14" alt="">
+            <span>添加自定义 API</span>
+          </div>
+        </div>
+
+        <!-- Add API Sub-panel (slides in from right of model popup) -->
+        <div
+          id="add-api-panel"
+          class="absolute hidden"
+          style="
+            bottom: 0;
+            left: calc(100% + 4px);
+            background: var(--bg-base-tertiary);
+            border: 1px solid var(--border-neutral-l2);
+            border-radius: var(--radius-lg);
+            padding: var(--spacer-16);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            z-index: 101;
+            width: 260px;
+          "
+        >
+          <div class="flex items-center justify-between mb-3">
+            <span style="font-size: 14px; color: var(--text-default); font-weight: 500;">添加 API</span>
+            <img id="close-api-panel" src="../assets/icons/dl-builtin-trae/x.svg" width="16" height="16" alt="" class="cursor-pointer opacity-50">
+          </div>
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-1">
+              <label style="font-size: 12px; color: var(--text-tertiary);">模型名称</label>
+              <input
+                type="text"
+                placeholder="例如: My GPT-4"
+                class="rounded-md px-2.5 py-1.5 border-none outline-none"
+                style="
+                  height: 32px;
+                  background: var(--bg-base-secondary);
+                  color: var(--text-default);
+                  font-size: 13px;
+                  border: 1px solid var(--border-neutral-l2);
+                "
+              >
+            </div>
+            <div class="flex flex-col gap-1">
+              <label style="font-size: 12px; color: var(--text-tertiary);">API 地址</label>
+              <input
+                type="text"
+                placeholder="https://api.example.com/v1"
+                class="rounded-md px-2.5 py-1.5 border-none outline-none"
+                style="
+                  height: 32px;
+                  background: var(--bg-base-secondary);
+                  color: var(--text-default);
+                  font-size: 13px;
+                  border: 1px solid var(--border-neutral-l2);
+                "
+              >
+            </div>
+            <div class="flex flex-col gap-1">
+              <label style="font-size: 12px; color: var(--text-tertiary);">API Key</label>
+              <input
+                type="password"
+                placeholder="sk-..."
+                class="rounded-md px-2.5 py-1.5 border-none outline-none"
+                style="
+                  height: 32px;
+                  background: var(--bg-base-secondary);
+                  color: var(--text-default);
+                  font-size: 13px;
+                  border: 1px solid var(--border-neutral-l2);
+                "
+              >
+            </div>
+            <button
+              class="flex items-center justify-center gap-1.5 w-full rounded-md cursor-pointer mt-1"
+              style="
+                height: 32px;
+                background: var(--bg-brand);
+                color: var(--text-onbrand);
+                font-size: 13px;
+                border: none;
+              "
+            >
+              <img src="../assets/icons/dl-builtin-trae/check-circle.33c192.svg" width="14" height="14" alt="">
+              <span>确认添加</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div
+        data-dom-id="nav-settings"
+        class="flex items-center gap-3 px-1 cursor-pointer rounded-md"
+        style="height: 32px; color: var(--text-tertiary); font-size: 13px;"
+      >
+        <img src="../assets/icons/dl-builtin-trae/gear.svg" width="16" height="16" alt="" class="opacity-50">
+        <span>设置</span>
+      </div>
+
+      <!-- Check Updates -->
+      <div
+        id="check-update-btn"
+        class="flex items-center gap-3 px-1 cursor-pointer rounded-md"
+        style="height: 32px; color: var(--text-tertiary); font-size: 13px;"
+      >
+        <img src="../assets/icons/dl-builtin-trae/refresh.svg" width="16" height="16" alt="" class="opacity-50">
+        <span>检查更新</span>
+      </div>
+
+      <!-- Creator Profile (Codex-style popup trigger) -->
+      <div class="relative" id="creator-profile-wrapper">
+        <div
+          id="creator-profile-trigger"
+          data-dom-id="nav-creator"
+          class="flex items-center gap-2.5 px-1 py-1.5 cursor-pointer rounded-md"
+          style="color: var(--text-secondary); font-size: 13px;"
+        >
+          <div
+            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+            style="background: var(--bg-brand); color: var(--text-onbrand);"
+          >创</div>
+          <div class="flex flex-col min-w-0">
+            <span style="font-size: 13px; color: var(--text-default); line-height: 1.3;">创作者</span>
+            <span style="font-size: 11px; color: var(--text-tertiary); line-height: 1.2;">免费版</span>
+          </div>
+          <img src="../assets/icons/dl-builtin-trae/more-h.svg" width="14" height="14" alt="" class="opacity-40 ml-auto flex-shrink-0">
+        </div>
+
+        <!-- Codex-style Popup Menu -->
+        <div
+          id="creator-popup"
+          class="absolute left-0 right-0 hidden"
+          style="
+            bottom: calc(100% + 8px);
+            background: var(--bg-base-tertiary);
+            border: 1px solid var(--border-neutral-l2);
+            border-radius: var(--radius-lg);
+            padding: var(--spacer-12) 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            z-index: 100;
+            min-width: 200px;
+          "
+        >
+          <!-- User Header -->
+          <div class="flex items-center gap-3 px-3 pb-2 mb-1" style="border-bottom: 1px solid var(--border-neutral-l1);">
+            <div
+              class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0"
+              style="background: var(--bg-brand); color: var(--text-onbrand);"
+            >创</div>
+            <div class="flex flex-col min-w-0">
+              <span style="font-size: 13px; color: var(--text-default); font-weight: 500;">创作者</span>
+              <span style="font-size: 11px; color: var(--text-tertiary);">creator@example.com</span>
+            </div>
+          </div>
+
+          <!-- Menu Items -->
+          <div class="flex flex-col py-1">
+            <div class="flex items-center gap-2.5 px-3 cursor-pointer rounded-sm mx-1" style="height: 32px; color: var(--text-secondary); font-size: 13px;">
+              <img src="../assets/icons/dl-builtin-trae/user.svg" width="15" height="15" alt="" class="opacity-50">
+              <span>个人资料</span>
+            </div>
+            <div class="flex items-center gap-2.5 px-3 cursor-pointer rounded-sm mx-1" style="height: 32px; color: var(--text-secondary); font-size: 13px;">
+              <img src="../assets/icons/dl-builtin-trae/settings.svg" width="15" height="15" alt="" class="opacity-50">
+              <span>偏好设置</span>
+            </div>
+            <div class="flex items-center gap-2.5 px-3 cursor-pointer rounded-sm mx-1" style="height: 32px; color: var(--text-secondary); font-size: 13px;">
+              <img src="../assets/icons/dl-builtin-trae/zap.svg" width="15" height="15" alt="" class="opacity-50">
+              <span>升级 Pro</span>
+              <span class="ml-auto text-xs px-1.5 py-0.5 rounded" style="background: var(--bg-overlay-l3); color: var(--text-brand); font-size: 10px;">新</span>
+            </div>
+            <div class="flex items-center gap-2.5 px-3 cursor-pointer rounded-sm mx-1" style="height: 32px; color: var(--text-secondary); font-size: 13px;">
+              <img src="../assets/icons/dl-builtin-trae/message-circle.svg" width="15" height="15" alt="" class="opacity-50">
+              <span>帮助与反馈</span>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="mx-3 my-1" style="border-top: 1px solid var(--border-neutral-l1);"></div>
+
+          <!-- Logout -->
+          <div class="flex items-center gap-2.5 px-3 py-1 cursor-pointer rounded-sm mx-1" style="height: 32px; color: var(--text-tertiary); font-size: 13px;">
+            <img src="../assets/icons/dl-builtin-trae/log-out.svg" width="15" height="15" alt="" class="opacity-50">
+            <span>退出登录</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Area (Top Bar + Content) -->
+  <div class="flex flex-col flex-1 min-w-0 h-full">
+    <!-- Top Bar -->
+    <div
+      class="flex items-center justify-between flex-shrink-0 px-6"
+      style="
+        height: 56px;
+        background: var(--bg-base-secondary);
+        border-bottom: 1px solid var(--border-neutral-l1);
+      "
+    >
+      <!-- Left: Title + Breadcrumb -->
+      <div class="flex flex-col justify-center min-w-0">
+        <h1 style="font-size: var(--heading-md-font-size); color: var(--text-default); font-weight: 600; line-height: 1.3;">
+          作品管理
+        </h1>
+        <span style="font-size: 12px; color: var(--text-tertiary); line-height: 1.4; margin-top: 1px;">
+          未选择 &gt; 第一卷 &gt; 第一章
+        </span>
+      </div>
+
+      <!-- Right: Search + Actions -->
+      <div class="flex items-center gap-3 flex-shrink-0">
+        <!-- Search Input -->
+        <div
+          class="flex items-center gap-2 rounded-md px-3"
+          style="
+            height: 34px;
+            width: 220px;
+            background: var(--bg-base-tertiary);
+            border: 1px solid var(--border-neutral-l2);
+          "
+        >
+          <img src="../assets/icons/dl-builtin-trae/search.svg" width="16" height="16" alt="" class="opacity-50 flex-shrink-0">
+          <input
+            type="text"
+            placeholder="搜索..."
+            class="bg-transparent border-none outline-none flex-1"
+            style="
+              font-size: var(--body-base-font-size);
+              color: var(--text-default);
+              line-height: var(--body-base-line-height);
+            "
+          >
+        </div>
+
+        <!-- Notification Bell -->
+        <div class="flex items-center justify-center w-9 h-9 rounded-md cursor-pointer" style="color: var(--icon-secondary);">
+          <img src="../assets/icons/dl-builtin-trae/bell.svg" width="18" height="18" alt="" class="opacity-60">
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="flex-1 overflow-auto p-6" style="background: var(--bg-base-default);">
+
+
+        <!-- Stats Row -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <!-- 全部作品 -->
+          <div class="flex items-center gap-3 rounded-md px-4" style="height: 64px; background: var(--bg-base-tertiary);">
+            <img src="../assets/icons/dl-builtin-trae/files.svg" width="18" height="18" alt="" style="opacity: 0.6;">
+            <div class="flex flex-col justify-center min-w-0">
+              <span class="truncate" style="font-size: var(--body-xs-font-size); color: var(--text-tertiary); line-height: 1.4;">全部作品</span>
+              <span class="stat-number truncate" style="font-size: var(--heading-sm-font-size); font-weight: 600; color: var(--text-default); font-variant-numeric: tabular-nums; line-height: 1.3;">0</span>
+            </div>
+          </div>
+          <!-- 写作中 -->
+          <div class="flex items-center gap-3 rounded-md px-4" style="height: 64px; background: var(--bg-base-tertiary);">
+            <img src="../assets/icons/dl-builtin-trae/sparkles.32f08c.svg" width="18" height="18" alt="">
+            <div class="flex flex-col justify-center min-w-0">
+              <span class="truncate" style="font-size: var(--body-xs-font-size); color: var(--text-tertiary); line-height: 1.4;">写作中</span>
+              <span class="stat-number" style="font-size: var(--heading-sm-font-size); font-weight: 600; color: var(--text-brand); font-variant-numeric: tabular-nums; line-height: 1.3;">0</span>
+            </div>
+          </div>
+          <!-- 已完结 -->
+          <div class="flex items-center gap-3 rounded-md px-4" style="height: 64px; background: var(--bg-base-tertiary);">
+            <img src="../assets/icons/dl-builtin-trae/check-circle.svg" width="18" height="18" alt="" style="opacity: 0.6;">
+            <div class="flex flex-col justify-center min-w-0">
+              <span class="truncate" style="font-size: var(--body-xs-font-size); color: var(--text-tertiary); line-height: 1.4;">已完结</span>
+              <span class="stat-number" style="font-size: var(--heading-sm-font-size); font-weight: 600; color: var(--text-default); font-variant-numeric: tabular-nums; line-height: 1.3;">0</span>
+            </div>
+          </div>
+          <!-- 总字数 -->
+          <div class="flex items-center gap-3 rounded-md px-4" style="height: 64px; background: var(--bg-base-tertiary);">
+            <img src="../assets/icons/dl-builtin-trae/type.svg" width="18" height="18" alt="" style="opacity: 0.6;">
+            <div class="flex flex-col justify-center min-w-0">
+              <span class="truncate" style="font-size: var(--body-xs-font-size); color: var(--text-tertiary); line-height: 1.4;">总字数</span>
+              <span class="stat-number whitespace-nowrap" style="font-size: var(--heading-sm-font-size); font-weight: 600; color: var(--text-default); font-variant-numeric: tabular-nums; line-height: 1.3;">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toolbar Row -->
+        <div class="flex items-center gap-3 mb-5">
+          <!-- Search input (200px) -->
+          <div class="flex items-center gap-2 rounded-md px-3 flex-shrink-0" style="height: 32px; width: 200px; background: var(--bg-base-secondary); border: 1px solid var(--border-neutral-l1);">
+            <img src="../assets/icons/dl-builtin-trae/search.svg" width="14" height="14" alt="" style="opacity: 0.5;">
+            <input type="text" placeholder="搜索作品..." class="bg-transparent border-none outline-none flex-1" style="font-size: var(--body-sm-font-size); color: var(--text-default); line-height: 1.4;">
+          </div>
+          <!-- Filter pills -->
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button class="inline-flex items-center justify-center whitespace-nowrap rounded-md cursor-pointer" style="height: 28px; padding: 0 var(--spacer-12); font-size: var(--body-sm-font-size); background: var(--bg-brand-popup); color: var(--text-brand); border: 1px solid transparent;">全部</button>
+            <button class="inline-flex items-center justify-center whitespace-nowrap rounded-md cursor-pointer" style="height: 28px; padding: 0 var(--spacer-12); font-size: var(--body-sm-font-size); background: transparent; color: var(--text-secondary); border: 1px solid var(--border-neutral-l1);">连载中</button>
+            <button class="inline-flex items-center justify-center whitespace-nowrap rounded-md cursor-pointer" style="height: 28px; padding: 0 var(--spacer-12); font-size: var(--body-sm-font-size); background: transparent; color: var(--text-secondary); border: 1px solid var(--border-neutral-l1);">已完结</button>
+            <button class="inline-flex items-center justify-center whitespace-nowrap rounded-md cursor-pointer" style="height: 28px; padding: 0 var(--spacer-12); font-size: var(--body-sm-font-size); background: transparent; color: var(--text-secondary); border: 1px solid var(--border-neutral-l1);">暂停</button>
+          </div>
+          <!-- Spacer -->
+          <div class="flex-1"></div>
+          <!-- New work button -->
+          <button class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md cursor-pointer flex-shrink-0" style="height: 32px; padding: 0 var(--spacer-16); font-size: var(--body-sm-font-size); font-weight: 500; background: var(--bg-brand); color: var(--text-onbrand); border: none;">
+            <img src="../assets/icons/dl-builtin-trae/plus.0c0c0d.svg" width="14" height="14" alt="">
+            <span>新建作品</span>
+          </button>
+        </div>
+
+        <!-- Works Grid (3 columns) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="col-span-full flex flex-col items-center justify-center py-16 text-center" style="color: var(--text-tertiary);">
+            <img src="../assets/icons/dl-builtin-trae/scroll-text.svg" width="48" height="48" alt="" style="opacity: 0.3; margin-bottom: 16px;">
+            <div style="font-size: var(--heading-sm-font-size); font-weight: 500; color: var(--text-secondary); margin-bottom: 8px;">暂无作品</div>
+            <div style="font-size: var(--body-sm-font-size); line-height: 1.5;">点击右上角"新建作品"开始你的创作之旅</div>
+          </div>
+        </div>
+
+        <!-- Load More -->
+        <div class="flex justify-center mt-6">
+          <button class="inline-flex items-center justify-center whitespace-nowrap rounded-md cursor-pointer" style="height: 36px; padding: 0 var(--spacer-24); font-size: var(--body-sm-font-size); color: var(--text-secondary); background: transparent; border: 1px solid var(--border-neutral-l1);">加载更多</button>
+        </div>
+
+      
+      
+    </main>
+  </div>
+</div>
+
+<script src="../js/works-store.js"></script>
+    <script src="../js/materials-store.js"></script>
+    <script src="../js/ai-service.js"></script>
+    <script src="../js/main.js"></script>
+</body>
+</html>

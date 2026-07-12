@@ -1,0 +1,51 @@
+{
+  "name": "ai-writing-tool",
+  "version": "1.0.0",
+  "description": "AI 写小说工具",
+  "main": "main-electron.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "release": "electron-builder --win --publish always"
+  },
+  "build": {
+    "appId": "com.aiwriting.tool",
+    "productName": "AI写作工具",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main-electron.js",
+      "preload.js",
+      "index.html",
+      "pages/**/*",
+      "js/**/*",
+      "css/**/*",
+      "assets/**/*",
+      "partials/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/app-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AI写作工具"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "xingling80",
+      "repo": "Ai-writing-tool"
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  }
+}

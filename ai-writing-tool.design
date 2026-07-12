@@ -1,0 +1,144 @@
+{
+  "data": [
+    {
+      "id": "page-editor",
+      "title": "章节编辑器",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1752237600000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/editor.html",
+        "interactions": [
+          {
+            "domId": "nav-works",
+            "targetPageId": "page-works"
+          },
+          {
+            "domId": "nav-materials",
+            "targetPageId": "page-materials",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-new-work",
+            "targetPageId": "page-new-work",
+            "hideEdge": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-works",
+      "title": "作品管理",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1752237600000,
+      "canvasData": {
+        "x": 620,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/works.html",
+        "interactions": [
+          {
+            "domId": "nav-materials",
+            "targetPageId": "page-materials"
+          },
+          {
+            "domId": "nav-editor",
+            "targetPageId": "page-editor",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-new-work",
+            "targetPageId": "page-new-work",
+            "hideEdge": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-materials",
+      "title": "创作素材库",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1752237600000,
+      "canvasData": {
+        "x": 1240,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/materials.html",
+        "interactions": [
+          {
+            "domId": "nav-editor",
+            "targetPageId": "page-editor",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-works",
+            "targetPageId": "page-works",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-new-work",
+            "targetPageId": "page-new-work",
+            "hideEdge": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-new-work",
+      "title": "新建作品",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1752237600000,
+      "canvasData": {
+        "x": 0,
+        "y": 377,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/new-work.html",
+        "interactions": [
+          {
+            "domId": "nav-editor",
+            "targetPageId": "page-editor",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-works",
+            "targetPageId": "page-works",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-materials",
+            "targetPageId": "page-materials",
+            "hideEdge": true
+          }
+        ]
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "desktop",
+    "projectName": "AI写小说",
+    "designLibrary": {
+      "name": "TRAE",
+      "id": "dl_builtin_trae",
+      "version": null,
+      "scope": "built-in-global",
+      "path": "c:\\Users\\34243\\.trae-cn\\design_libraries\\dl_builtin_trae",
+      "versionSource": "selected-context"
+    },
+    "showEdge": false
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "root": {
+    "nodeId": "gen-project-shell",
+    "kind": "project-shell",
+    "pageIds": ["page-workspace", "page-content", "page-templates"],
+    "output": "partials/project-shell.html",
+    "sharedRegions": ["sidebar", "top-bar", "user-profile"],
+    "privateRegions": ["main-content"],
+    "mutableSlots": ["activeNavItem", "pageTitle"],
+    "status": "planned",
+    "children": [
+      {
+        "nodeId": "gen-page-workspace",
+        "kind": "page-leaf",
+        "pageIds": ["page-workspace"],
+        "output": "pages/workspace.html",
+        "sharedRegions": [],
+        "privateRegions": ["editor area, sidebar panel, AI assistant panel"],
+        "mutableSlots": ["activeNavItem", "pageTitle"],
+        "status": "planned",
+        "children": []
+      },
+      {
+        "nodeId": "gen-page-content",
+        "kind": "page-leaf",
+        "pageIds": ["page-content"],
+        "output": "pages/content.html",
+        "sharedRegions": [],
+        "privateRegions": ["content list, toolbar, filters"],
+        "mutableSlots": ["activeNavItem", "pageTitle"],
+        "status": "planned",
+        "children": []
+      },
+      {
+        "nodeId": "gen-page-templates",
+        "kind": "page-leaf",
+        "pageIds": ["page-templates"],
+        "output": "pages/templates.html",
+        "sharedRegions": [],
+        "privateRegions": ["template grid, category filters, search"],
+        "mutableSlots": ["activeNavItem", "pageTitle"],
+        "status": "planned",
+        "children": []
+      }
+    ]
+  }
+}
