@@ -143,68 +143,42 @@
     'DeepSeek': {
       provider: 'openai',
       model: 'deepseek-chat',
-      apiUrl: 'https://api.deepseek.com/chat/completions',
-      description: '深度求索，代码和推理能力强'
+      apiUrl: 'https://api.deepseek.com/v1/chat/completions'
     },
-    '通义千问': {
+    'Qwen': {
       provider: 'openai',
-      model: 'qwen-max',
-      apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-      description: '阿里通义千问，中文能力强'
-    },
-    '豆包': {
-      provider: 'openai',
-      model: 'doubao-pro-32k',
-      apiUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
-      description: '字节跳动豆包，创作能力强'
-    },
-    'Kimi': {
-      provider: 'openai',
-      model: 'moonshot-v1-8k',
-      apiUrl: 'https://api.moonshot.cn/v1/chat/completions',
-      description: '月之暗面Kimi，长文本能力强'
-    },
-    '智谱': {
-      provider: 'openai',
-      model: 'glm-4',
-      apiUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-      description: '智谱AI，通用大模型'
-    },
-    '文心一言': {
-      provider: 'openai',
-      model: 'ernie-4.0-8k',
-      apiUrl: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions',
-      description: '百度文心一言，中文理解强'
+      model: 'qwen-plus',
+      apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
     },
     'Claude': {
       provider: 'anthropic',
-      model: 'claude-sonnet-4-20250514',
-      apiUrl: 'https://api.anthropic.com/v1/messages',
-      description: 'Anthropic Claude，写作质量高'
+      model: 'claude-3-5-sonnet-20240620',
+      apiUrl: 'https://api.anthropic.com/v1/messages'
+    },
+    'Gemini': {
+      provider: 'openai',
+      model: 'gemini-1.5-flash',
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
     },
     'GPT': {
       provider: 'openai',
       model: 'gpt-4o',
-      apiUrl: 'https://api.openai.com/v1/chat/completions',
-      description: 'OpenAI GPT，综合能力强'
+      apiUrl: 'https://api.openai.com/v1/chat/completions'
     },
-    '零一万物': {
+    'Moonshot': {
       provider: 'openai',
-      model: 'yi-large',
-      apiUrl: 'https://api.lingyiwanwu.com/v1/chat/completions',
-      description: '零一万物，中文创作优秀'
+      model: 'moonshot-v1-8k',
+      apiUrl: 'https://api.moonshot.cn/v1/chat/completions'
     },
-    'MiniMax': {
+    'Yi': {
       provider: 'openai',
-      model: 'abab6.5s-chat',
-      apiUrl: 'https://api.minimax.chat/v1/text/chatcompletion_v2',
-      description: 'MiniMax，创作类场景'
+      model: 'yi-34b-chat',
+      apiUrl: 'https://api.lingyiwanwu.com/v1/chat/completions'
     },
-    '阶跃星辰': {
+    'Zhipu': {
       provider: 'openai',
-      model: 'step-2-16k',
-      apiUrl: 'https://api.stepfun.com/v1/chat/completions',
-      description: '阶跃星辰，多模态能力'
+      model: 'glm-4',
+      apiUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
     }
   };
 
@@ -234,6 +208,9 @@
   function getModelsConfig() {
     var saved = loadConfig();
     var merged = {};
+    Object.keys(BUILTIN_MODELS).forEach(function (key) {
+      merged[key] = BUILTIN_MODELS[key];
+    });
     Object.keys(saved).forEach(function (key) {
       merged[key] = saved[key];
     });

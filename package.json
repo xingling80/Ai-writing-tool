@@ -39,8 +39,7 @@
     "publish": {
       "provider": "github",
       "owner": "xingling80",
-      "repo": "Ai-writing-tool",
-      "releaseType": "release"
+      "repo": "Ai-writing-tool"
     }
   },
   "devDependencies": {
