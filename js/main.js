@@ -3119,20 +3119,32 @@
         opt.style.background = 'var(--bg-overlay-l1)';
       }
 
+      var isBuiltin = window.AIService.BUILTIN_MODELS[name];
+      var hasApiKey = config[name].apiKey;
+
       opt.innerHTML =
         '<img src="../assets/icons/dl-builtin-trae/check.svg" width="14" height="14" alt="" class="' + (name === currentModel ? '' : 'opacity-0') + '" style="color:var(--icon-brand);">' +
         '<span style="font-size:13px; color:var(--text-default);">' + name + '</span>' +
-        '<span class="api-status" style="font-size:10px; color:var(--text-tertiary); margin-left:auto;">' + (config[name].apiKey ? '已配置' : '未配置') + '</span>' +
+        '<span class="api-status" style="font-size:10px; color:var(--text-tertiary); margin-left:auto;">' + (hasApiKey ? '已配置' : '未配置') + '</span>' +
+        (isBuiltin && !hasApiKey ? '<button class="config-model-btn" style="padding:2px 8px; height:24px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:4px; font-size:11px; cursor:pointer;">配置</button>' : '') +
         '<button class="delete-model-btn" style="width:20px; height:20px; border:none; background:transparent; color:var(--text-tertiary); font-size:12px; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>';
 
       opt.addEventListener('click', function(e) {
-        if (e.target.closest('.delete-model-btn')) return;
+        if (e.target.closest('.delete-model-btn') || e.target.closest('.config-model-btn')) return;
         e.stopPropagation();
         if (modelNameEl) modelNameEl.textContent = name;
         window.AIService.setCurrentModel(name);
         popup.classList.add('hidden');
         showNotification('已切换到 ' + name, 'info');
       });
+
+      var configBtn = opt.querySelector('.config-model-btn');
+      if (configBtn) {
+        configBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          showPresetModelConfigPanel(name);
+        });
+      }
 
       var delModelBtn = opt.querySelector('.delete-model-btn');
       if (delModelBtn) {
@@ -3152,6 +3164,87 @@
       }
 
       optionsContainer.appendChild(opt);
+    });
+  }
+
+  function showPresetModelConfigPanel(modelName) {
+    var builtinConfig = window.AIService.BUILTIN_MODELS[modelName];
+    if (!builtinConfig) return;
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center;';
+
+    var dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--bg-base-secondary); border:1px solid var(--border-neutral-l2); border-radius:12px; padding:24px; width:360px; max-width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.4); animation:fadeIn 0.2s ease-out;';
+
+    dialog.innerHTML =
+      '<div style="display:flex; items-center; justify-content:space-between; margin-bottom:16px;">' +
+      '<h3 style="font-size:16px; color:var(--text-default); font-weight:600;">配置 ' + modelName + '</h3>' +
+      '<img src="../assets/icons/dl-builtin-trae/x.svg" width="16" height="16" alt="关闭" class="close-dialog-btn cursor-pointer opacity-50" style="cursor:pointer;">' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+      '<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">模型</div>' +
+      '<div style="font-size:13px; color:var(--text-default);">' + builtinConfig.model + '</div>' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+      '<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">API 地址</div>' +
+      '<div style="font-size:12px; color:var(--text-secondary); word-break:break-all;">' + builtinConfig.apiUrl + '</div>' +
+      '</div>' +
+      '<div class="flex flex-col gap-1">' +
+      '<label style="font-size:12px; color:var(--text-tertiary);">API Key</label>' +
+      '<input type="password" placeholder="sk-..." class="rounded-md px-2.5 py-1.5 border-none outline-none" style="height:32px; background:var(--bg-base-tertiary); color:var(--text-default); font-size:13px; border:1px solid var(--border-neutral-l2);">' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">' +
+      '<button class="cancel-btn" style="padding:6px 16px; height:32px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l1); border-radius:6px; cursor:pointer; font-size:13px;">取消</button>' +
+      '<button class="confirm-btn" style="padding:6px 16px; height:32px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; cursor:pointer; font-size:13px;">确认配置</button>' +
+      '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    var input = dialog.querySelector('input');
+    input.focus();
+
+    function closeDialog() {
+      overlay.remove();
+    }
+
+    function confirm() {
+      var apiKey = input.value.trim();
+      if (!apiKey) {
+        showNotification('请输入 API Key', 'warn');
+        return;
+      }
+
+      var config = {
+        provider: builtinConfig.provider,
+        model: builtinConfig.model,
+        apiUrl: builtinConfig.apiUrl,
+        apiKey: apiKey
+      };
+
+      window.AIService.setModelConfig(modelName, config);
+      window.AIService.setCurrentModel(modelName);
+
+      closeDialog();
+      renderModelOptions();
+      updateModelStatus();
+
+      var modelNameEl = document.getElementById('ai-model-name');
+      if (modelNameEl) modelNameEl.textContent = modelName;
+
+      showNotification(modelName + ' 配置成功', 'info');
+    }
+
+    dialog.querySelector('.close-dialog-btn').addEventListener('click', closeDialog);
+    dialog.querySelector('.cancel-btn').addEventListener('click', closeDialog);
+    dialog.querySelector('.confirm-btn').addEventListener('click', confirm);
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') confirm();
+      if (e.key === 'Escape') closeDialog();
+    });
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeDialog();
     });
   }
 
