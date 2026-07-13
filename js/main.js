@@ -33,6 +33,215 @@
     return div.innerHTML;
   }
 
+  // ========== 文本后处理工具：智能分段、过滤标题、小说格式优化 ==========
+
+  // 过滤Markdown标题和章节标题
+  function filterHeadings(text) {
+    if (!text) return '';
+    var lines = text.split('\n');
+    var filtered = [];
+    var headingPatterns = [
+      /^#{1,6}\s+.+$/,
+      /^第[一二三四五六七八九十百千零\d]+章\s*.*$/,
+      /^第[一二三四五六七八九十百千零\d]+节\s*.*$/,
+      /^第[一二三四五六七八九十百千零\d]+卷\s*.*$/,
+      /^[一二三四五六七八九十]+、\s*.+$/,
+      /^\d+\.\s*.+$/,
+      /^【.*】$/,
+      /^\[.*\]$/
+    ];
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) {
+        filtered.push(lines[i]);
+        continue;
+      }
+      var isHeading = false;
+      for (var j = 0; j < headingPatterns.length; j++) {
+        if (headingPatterns[j].test(line)) {
+          isHeading = true;
+          break;
+        }
+      }
+      if (!isHeading) {
+        filtered.push(lines[i]);
+      }
+    }
+    return filtered.join('\n');
+  }
+
+  // 清理Markdown格式标记
+  function cleanMarkdown(text) {
+    if (!text) return '';
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/~~(.+?)~~/g, '$1')
+      .replace(/`(.+?)`/g, '$1')
+      .replace(/\[(.+?)\]\(.+?\)/g, '$1');
+  }
+
+  // 智能分段：根据语义和标点自动分段
+  function smartSplitParagraphs(text) {
+    if (!text) return [];
+
+    // 先按已有换行分割
+    var rawParagraphs = text.split(/\n\s*\n/).filter(function(p) { return p.trim(); });
+
+    // 如果已经有多个段落，直接返回（清理后）
+    if (rawParagraphs.length > 1) {
+      return rawParagraphs.map(function(p) {
+        return p.replace(/\n/g, '').trim();
+      }).filter(function(p) { return p; });
+    }
+
+    // 单一大段，需要智能拆分
+    var content = text.replace(/\n/g, ' ').trim();
+    if (!content) return [];
+
+    var paragraphs = [];
+    var minLength = 80;
+    var maxLength = 200;
+
+    // 按句子分割
+    var sentences = content.split(/([。！？!?])/);
+    var buffer = '';
+
+    for (var i = 0; i < sentences.length; i++) {
+      var part = sentences[i];
+      if (/[。！？!?]/.test(part)) {
+        buffer += part;
+        // 检查是否可以分段
+        if (buffer.length >= minLength && paragraphs.length > 0) {
+          // 如果当前累积超过最大长度，或者是对话结束，分段
+          if (buffer.length >= maxLength || /^[“"]/.test(buffer.trim()) || /[”"]$/.test(buffer.trim())) {
+            paragraphs.push(buffer.trim());
+            buffer = '';
+          }
+        } else if (buffer.length >= maxLength && paragraphs.length === 0) {
+          paragraphs.push(buffer.trim());
+          buffer = '';
+        }
+      } else {
+        buffer += part;
+      }
+    }
+
+    if (buffer.trim()) {
+      paragraphs.push(buffer.trim());
+    }
+
+    // 如果分段太少，强制按长度分
+    if (paragraphs.length <= 1 && content.length > maxLength * 2) {
+      paragraphs = [];
+      var remaining = content;
+      while (remaining.length > 0) {
+        if (remaining.length <= maxLength) {
+          paragraphs.push(remaining.trim());
+          break;
+        }
+        var splitPos = maxLength;
+        // 尝试在标点处断开
+        for (var k = maxLength; k >= minLength; k--) {
+          if (/[。！？!?]/.test(remaining[k])) {
+            splitPos = k + 1;
+            break;
+          }
+        }
+        paragraphs.push(remaining.substring(0, splitPos).trim());
+        remaining = remaining.substring(splitPos).trim();
+      }
+    }
+
+    return paragraphs.filter(function(p) { return p && p.length > 0; });
+  }
+
+  // 对话格式优化：识别对话并单独成段
+  function optimizeDialogueFormat(paragraphs) {
+    if (!paragraphs || paragraphs.length === 0) return [];
+
+    var result = [];
+    for (var i = 0; i < paragraphs.length; i++) {
+      var para = paragraphs[i];
+      // 如果段落中既有对话又有叙述，且对话在中间，尝试拆分
+      var dialoguePattern = /[“"][^”"]+[”"][，。！？,?!]?/g;
+      var dialogues = para.match(dialoguePattern);
+
+      if (dialogues && dialogues.length > 0 && para.length > 150) {
+        // 有多个对话且段落较长，拆分开
+        var parts = para.split(/([“"][^”"]+[”"][，。！？,?!]?)/);
+        var currentNarrative = '';
+
+        for (var j = 0; j < parts.length; j++) {
+          var part = parts[j].trim();
+          if (!part) continue;
+
+          if (/^[“"]/.test(part)) {
+            // 对话部分
+            if (currentNarrative.trim()) {
+              result.push(currentNarrative.trim());
+              currentNarrative = '';
+            }
+            result.push(part);
+          } else {
+            // 叙述部分
+            currentNarrative += part;
+          }
+        }
+        if (currentNarrative.trim()) {
+          result.push(currentNarrative.trim());
+        }
+      } else {
+        result.push(para);
+      }
+    }
+
+    return result.filter(function(p) { return p && p.trim().length > 0; });
+  }
+
+  // 完整的小说文本后处理流水线
+  function processNovelText(text, options) {
+    options = options || {};
+    var result = text;
+
+    // 1. 过滤标题
+    if (options.filterHeadings !== false) {
+      result = filterHeadings(result);
+    }
+
+    // 2. 清理Markdown标记
+    if (options.cleanMarkdown !== false) {
+      result = cleanMarkdown(result);
+    }
+
+    // 3. 智能分段
+    var paragraphs = smartSplitParagraphs(result);
+
+    // 4. 对话格式优化
+    if (options.optimizeDialogue !== false) {
+      paragraphs = optimizeDialogueFormat(paragraphs);
+    }
+
+    return paragraphs;
+  }
+
+  // 将段落数组转换为HTML
+  function paragraphsToHtml(paragraphs, options) {
+    options = options || {};
+    if (!paragraphs || paragraphs.length === 0) return '';
+
+    return paragraphs.map(function(p) {
+      var style = '';
+      if (options.textIndent !== false) {
+        style = 'style="margin-bottom: 24px; text-indent: 2em;"';
+      } else {
+        style = 'style="margin-bottom: 24px;"';
+      }
+      return '<p ' + style + '>' + escapeHtml(p) + '</p>';
+    }).join('');
+  }
+
   function getEditorText() {
     var article = document.querySelector('article');
     if (!article) return '';
@@ -2181,25 +2390,40 @@
 
   // ========== AI 助手聊天（编辑器右侧面板）==========
   function initComposer() {
-    var composer = document.querySelector('.ds-composer');
-    var input = composer ? composer.querySelector('.ds-composer__input') : null;
-    var sendBtn = composer ? composer.querySelector('.ds-composer__send') : null;
-
-    if (!input || !sendBtn) return;
-
-    // 清除对话历史按钮
+    var input = document.getElementById('ai-input-textarea');
+    var sendBtn = document.getElementById('ai-send-btn');
     var clearBtn = document.getElementById('clear-chat-btn');
+    var stopBtn = document.getElementById('stop-generate-btn');
+
+    if (!input) return;
+
+    // 清除对话历史
     if (clearBtn) {
       clearBtn.addEventListener('click', function() {
         showConfirmDialog('确定清空所有 AI 对话历史吗？', function() {
           chatHistory.length = 0;
-          var messagesContainer = document.querySelector('.flex-1.overflow-y-auto.px-4.py-4.flex.flex-col.gap-3');
-          if (messagesContainer) messagesContainer.innerHTML = '';
+          var messagesContainer = document.getElementById('chat-messages-container');
+          if (messagesContainer) {
+            // 保留欢迎消息
+            var welcomeMsg = messagesContainer.querySelector('.flex.gap-2');
+            messagesContainer.innerHTML = '';
+            if (welcomeMsg) messagesContainer.appendChild(welcomeMsg);
+          }
           showNotification('对话历史已清空', 'info');
         });
       });
     }
 
+    // 停止生成
+    if (stopBtn) {
+      stopBtn.addEventListener('click', function() {
+        isGenerating = false;
+        updateAIStatus('已停止');
+        stopBtn.classList.add('hidden');
+      });
+    }
+
+    // 发送消息
     input.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -2207,20 +2431,27 @@
       }
     });
 
-    sendBtn.addEventListener('click', sendMessage);
+    if (sendBtn) {
+      sendBtn.addEventListener('click', sendMessage);
+    }
 
     function sendMessage() {
       if (isGenerating) return;
       var content = input.value.trim();
       if (!content) return;
 
-      var messagesContainer = document.querySelector('.flex-1.overflow-y-auto.px-4.py-4.flex.flex-col.gap-3');
-      if (!messagesContainer) {
-        messagesContainer = document.createElement('div');
-        messagesContainer.style.cssText = 'flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px;';
-        composer.parentElement.insertBefore(messagesContainer, composer.parentElement.firstChild);
+      var messagesContainer = document.getElementById('chat-messages-container');
+      if (!messagesContainer) return;
+
+      // 意图识别
+      var detectedIntent = detectUserIntent(content);
+      if (detectedIntent) {
+        handleDetectedIntent(detectedIntent, content);
+        input.value = '';
+        return;
       }
 
+      // 普通对话
       var userMsg = createMessageEl('用户', content, 'user');
       messagesContainer.appendChild(userMsg);
 
@@ -2235,11 +2466,10 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
       isGenerating = true;
-      sendBtn.style.opacity = '0.5';
-      sendBtn.style.pointerEvents = 'none';
+      updateAIStatus('正在生成...');
+      if (stopBtn) stopBtn.classList.remove('hidden');
 
       var context = getWorkContext();
-      // 将当前编辑器内容加入上下文
       var editorText = getEditorText();
       if (editorText) {
         context.currentContent = editorText.substring(0, 3000);
@@ -2256,7 +2486,7 @@
             aiContent.innerHTML = '';
             firstChunk = false;
           }
-          aiContent.innerHTML = escapeHtml(fullContent).replace(/\n/g, '<br>');
+          aiContent.innerHTML = formatAIResponse(fullContent);
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         },
         onDone: function(fullContent) {
@@ -2265,17 +2495,137 @@
           }
           chatHistory.push({ role: 'assistant', content: fullContent });
           isGenerating = false;
-          sendBtn.style.opacity = '';
-          sendBtn.style.pointerEvents = '';
+          updateAIStatus('就绪');
+          if (stopBtn) stopBtn.classList.add('hidden');
         },
         onError: function(err) {
           aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
           isGenerating = false;
-          sendBtn.style.opacity = '';
-          sendBtn.style.pointerEvents = '';
+          updateAIStatus('就绪');
+          if (stopBtn) stopBtn.classList.add('hidden');
         }
       });
     }
+
+    // 插入选中内容按钮
+    var insertBtn = document.querySelector('.ds-composer__icon-btn[title="插入选中内容"]');
+    if (insertBtn) {
+      insertBtn.addEventListener('click', function() {
+        var selection = window.getSelection();
+        var selectedText = selection ? selection.toString().trim() : '';
+        if (selectedText) {
+          input.value += '\n【选中文本】\n' + selectedText + '\n';
+          input.focus();
+        } else {
+          showNotification('请先在编辑器中选中要插入的内容', 'warn');
+        }
+      });
+    }
+  }
+
+  // 意图识别
+  function detectUserIntent(message) {
+    var lowerMsg = message.toLowerCase();
+
+    var intentPatterns = [
+      { patterns: ['续写', '接着写', '继续写', '写下去', '接着', '继续'], intent: 'continueWriting' },
+      { patterns: ['润色', '优化', '修改', '改进', '美化'], intent: 'polish' },
+      { patterns: ['对话', '生成对话', '写对话', '添加对话'], intent: 'generateDialogue' },
+      { patterns: ['卡文', '写不出来', '卡壳', '卡住了', '没思路', '不知道怎么写'], intent: 'diagnose' },
+      { patterns: ['排版', '格式化', '格式'], intent: 'format' },
+      { patterns: ['扩写', '扩展', '展开', '详细'], intent: 'expandText' },
+      { patterns: ['精简', '压缩', '缩短', '简洁'], intent: 'condenseText' },
+      { patterns: ['检查', '一致性', '逻辑问题', '矛盾'], intent: 'checkConsistency' },
+      { patterns: ['自动写作', '批量写', '大量写', '写完'], intent: 'autoWrite' }
+    ];
+
+    for (var i = 0; i < intentPatterns.length; i++) {
+      var item = intentPatterns[i];
+      for (var j = 0; j < item.patterns.length; j++) {
+        if (lowerMsg.indexOf(item.patterns[j]) !== -1) {
+          return {
+            intent: item.intent,
+            confidence: 0.9,
+            originalMessage: message
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // 处理识别到的意图
+  function handleDetectedIntent(detected, message) {
+    var editorText = getEditorText();
+    var selection = window.getSelection();
+    var selectedText = selection ? selection.toString().trim() : '';
+
+    // 查找对应的按钮配置
+    var allButtons = DEFAULT_QUICK_BUTTONS.concat(EXPANDED_BUTTONS);
+    var btnConfig = null;
+
+    for (var i = 0; i < allButtons.length; i++) {
+      if (allButtons[i].action === detected.intent) {
+        btnConfig = allButtons[i];
+        break;
+      }
+    }
+
+    if (!btnConfig) return;
+
+    // 显示识别提示
+    var messagesContainer = document.getElementById('chat-messages-container');
+    if (messagesContainer) {
+      var intentMsg = createMessageEl('系统', '识别为：' + btnConfig.label + '，正在处理...', 'user');
+      intentMsg.querySelector('.msg-content').style.background = 'var(--bg-overlay-l2)';
+      intentMsg.querySelector('.msg-content').style.color = 'var(--text-secondary)';
+      intentMsg.querySelector('.msg-content').style.fontSize = '12px';
+      messagesContainer.appendChild(intentMsg);
+    }
+
+    // 根据意图执行操作
+    if (btnConfig.processType === 'special') {
+      handleSpecialAction(btnConfig);
+    } else if (btnConfig.processType === 'replaceSelection' && selectedText) {
+      executeAIAction(btnConfig, selectedText, 'replaceSelection');
+    } else if (editorText) {
+      executeAIAction(btnConfig, editorText, btnConfig.processType);
+    } else {
+      showNotification('编辑器中没有内容', 'warn');
+    }
+  }
+
+  // 更新 AI 状态栏
+  function updateAIStatus(status) {
+    var statusText = document.getElementById('ai-status-text');
+    if (statusText) {
+      statusText.textContent = status;
+    }
+  }
+
+  // 格式化 AI 响应（支持简单的 Markdown）
+  function formatAIResponse(text) {
+    if (!text) return '';
+
+    // 转义 HTML
+    var result = escapeHtml(text);
+
+    // 处理换行
+    result = result.replace(/\n/g, '<br>');
+
+    // 处理加粗
+    result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // 处理斜体
+    result = result.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // 处理标题（简化）
+    result = result.replace(/^### (.+)$/gm, '<h4 style="margin:8px 0 4px;font-size:14px;font-weight:600;">$1</h4>');
+    result = result.replace(/^## (.+)$/gm, '<h3 style="margin:12px 0 6px;font-size:15px;font-weight:600;">$1</h3>');
+    result = result.replace(/^# (.+)$/gm, '<h2 style="margin:12px 0 8px;font-size:16px;font-weight:600;">$1</h2>');
+
+    return result;
   }
 
   function createMessageEl(sender, text, type) {
@@ -2776,167 +3126,1133 @@
     });
   }
 
-  // ========== 编辑器快捷操作（续写、润色、生成对话、检查一致性）==========
-  function initQuickActions() {
-    var quickBtns = document.querySelectorAll('.flex.items-center.gap-2.px-4.flex-shrink-0.flex-wrap button');
-    var actionLabels = ['续写下一段', '润色全文', '生成对话', '检查一致性'];
+  // ========== 快捷按钮系统（新）==========
+  // 默认按钮配置
+  var DEFAULT_QUICK_BUTTONS = [
+    { id: 'continue', label: '续写', icon: 'pen-tool', action: 'continueWriting', processType: 'append', desc: '根据已有内容续写下一段' },
+    { id: 'polish', label: '润色', icon: 'edit', action: 'polish', processType: 'replace', desc: '优化表达，提升文学性' },
+    { id: 'dialogue', label: '对话', icon: 'message-circle', action: 'generateDialogue', processType: 'append', desc: '生成符合人物性格的对话' },
+    { id: 'autoWrite', label: '自动写作', icon: 'wand', action: 'autoWrite', processType: 'special', desc: '多种自动写作模式' },
+    { id: 'diagnose', label: '诊断', icon: 'stethoscope', action: 'diagnose', processType: 'chat', desc: '分析卡文原因并给出方案' },
+    { id: 'checkConsistency', label: '一致性', icon: 'check-circle', action: 'checkConsistency', processType: 'chat', desc: '检查人物、剧情一致性' },
+    { id: 'format', label: '排版', icon: 'align-left', action: 'format', processType: 'special', desc: '一键排版和导出' }
+  ];
 
-    quickBtns.forEach(function(btn, index) {
-      var label = btn.textContent.trim();
-      var actionType = null;
-      if (label === '续写下一段') actionType = 'continueWriting';
-      else if (label === '润色全文') actionType = 'polish';
-      else if (label === '生成对话') actionType = 'generateDialogue';
-      else if (label === '检查一致性') actionType = 'checkConsistency';
+  // 扩展按钮配置
+  var EXPANDED_BUTTONS = [
+    { id: 'expand', label: '扩写', icon: 'maximize', action: 'expandText', processType: 'replaceSelection', desc: '扩展内容，增加细节' },
+    { id: 'condense', label: '精简', icon: 'minimize', action: 'condenseText', processType: 'replaceSelection', desc: '压缩文字，更凝练' },
+    { id: 'scene', label: '场景增强', icon: 'image', action: 'enhanceScene', processType: 'replaceSelection', desc: '增强五感描写' },
+    { id: 'innerThought', label: '心理增强', icon: 'heart', action: 'enhanceInnerThought', processType: 'replaceSelection', desc: '丰富内心活动' },
+    { id: 'plotSuggest', label: '剧情建议', icon: 'compass', action: 'suggestPlotDirection', processType: 'chat', desc: '给出多个剧情走向建议' },
+    { id: 'extractChars', label: '提取角色', icon: 'users', action: 'extractCharacters', processType: 'chat', desc: '从文本提取角色设定' },
+    { id: 'summary', label: '更新摘要', icon: 'file-text', action: 'generateSummary', processType: 'memory', desc: '更新全局记忆摘要' }
+  ];
 
-      if (!actionType) return;
+  // 自动写作模式
+  var autoWriteMode = 'interactive'; // direct, outline, quick, interactive
 
-      btn.addEventListener('click', function() {
-        if (isGenerating) return;
-        var editorText = getEditorText();
-        if (!editorText) {
-          showNotification('编辑器中没有内容', 'warn');
-          return;
-        }
+  // 加载自定义按钮配置
+  function loadCustomButtons() {
+    try {
+      var saved = localStorage.getItem('ai_writing_custom_buttons');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  }
 
-        var messagesContainer = document.querySelector('.flex-1.overflow-y-auto.px-4.py-4.flex.flex-col.gap-3');
-        if (!messagesContainer) return;
+  function saveCustomButtons(buttons) {
+    try {
+      localStorage.setItem('ai_writing_custom_buttons', JSON.stringify(buttons));
+    } catch (e) {}
+  }
 
-        var sysMsg = createMessageEl('系统', '正在执行: ' + label + '...', 'user');
-        sysMsg.querySelector('.msg-content').style.background = 'var(--bg-overlay-l2)';
-        sysMsg.querySelector('.msg-content').style.color = 'var(--text-secondary)';
-        sysMsg.querySelector('.msg-content').style.fontSize = '12px';
-        messagesContainer.appendChild(sysMsg);
+  // 获取按钮配置（合并默认和自定义）
+  function getButtonConfig() {
+    var custom = loadCustomButtons();
+    if (custom && custom.quickButtons) {
+      return custom;
+    }
+    return {
+      quickButtons: DEFAULT_QUICK_BUTTONS.slice(0, 5),
+      expandedButtons: DEFAULT_QUICK_BUTTONS.slice(5).concat(EXPANDED_BUTTONS)
+    };
+  }
 
-        var aiMsg = createMessageEl('AI', '', 'ai');
-        var aiContent = aiMsg.querySelector('.msg-content');
-        aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在生成...</span>';
-        messagesContainer.appendChild(aiMsg);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  // 创建快捷按钮元素
+  function createQuickButton(config, isExpanded) {
+    var btn = document.createElement('button');
+    btn.className = 'quick-action-btn';
+    btn.setAttribute('data-action', config.action);
+    btn.setAttribute('data-process-type', config.processType);
+    btn.setAttribute('title', config.desc);
 
-        isGenerating = true;
-        var context = getWorkContext();
-        var messages = window.AIService.PROMPTS[actionType](context, editorText);
+    if (isExpanded) {
+      btn.style.cssText = 'display:flex; align-items:center; gap:8px; width:100%; height:32px; padding:0 12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-secondary); font-size:12px; cursor:pointer; transition:all 0.15s;';
+    } else {
+      btn.style.cssText = 'display:flex; align-items:center; justify-content:center; height:28px; padding:0 10px; background:transparent; border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-secondary); font-size:12px; cursor:pointer; transition:all 0.15s;';
+    }
 
-        var firstChunk = true;
-        window.AIService.chat(messages, {
-          stream: true,
-          temperature: 0.8,
-          max_tokens: 4096,
-          onChunk: function(delta, fullContent) {
-            if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
-            aiContent.innerHTML = escapeHtml(fullContent).replace(/\n/g, '<br>');
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          },
-          onDone: function(fullContent) {
-            if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; }
+    btn.innerHTML = '<span class="btn-label">' + config.label + '</span>';
 
-            // 将结果写回编辑器
-            var article = document.querySelector('article');
-            if (article && fullContent) {
-              if (actionType === 'continueWriting') {
-                // 续写：追加到末尾
-                var newParagraph = document.createElement('p');
-                newParagraph.textContent = fullContent;
-                article.appendChild(newParagraph);
-                showNotification('续写内容已追加到编辑器', 'info');
-              } else if (actionType === 'polish') {
-                // 润色：替换全文
-                article.innerHTML = fullContent.split('\n').filter(function(l) { return l.trim(); }).map(function(l) {
-                  return '<p>' + l + '</p>';
-                }).join('');
-                showNotification('润色内容已替换到编辑器', 'info');
-              } else if (actionType === 'generateDialogue') {
-                // 生成对话：追加到末尾
-                var dialogParagraph = document.createElement('p');
-                dialogParagraph.textContent = fullContent;
-                article.appendChild(dialogParagraph);
-                showNotification('对话已追加到编辑器', 'info');
-              }
-            }
-
-            chatHistory.push({ role: 'user', content: label + ': ' + editorText.substring(0, 200) });
-            chatHistory.push({ role: 'assistant', content: fullContent });
-            isGenerating = false;
-          },
-          onError: function(err) {
-            aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
-            isGenerating = false;
-          }
-        });
-      });
+    btn.addEventListener('mouseenter', function() {
+      btn.style.borderColor = 'var(--border-brand)';
+      btn.style.color = 'var(--text-default)';
+      btn.style.background = 'var(--bg-overlay-l1)';
+    });
+    btn.addEventListener('mouseleave', function() {
+      btn.style.borderColor = 'var(--border-neutral-l2)';
+      btn.style.color = 'var(--text-secondary)';
+      btn.style.background = isExpanded ? 'var(--bg-base-tertiary)' : 'transparent';
     });
 
-    // 添加"更新摘要"快捷按钮
-    var quickActionsContainer = document.querySelector('.flex.items-center.gap-2.px-4.flex-shrink-0.flex-wrap');
-    if (quickActionsContainer) {
-      var summaryBtn = document.createElement('button');
-      summaryBtn.className = 'flex items-center justify-center rounded-md cursor-pointer whitespace-nowrap';
-      summaryBtn.style.cssText = 'height: 28px; padding: 0 10px; background: transparent; border: 1px solid var(--border-neutral-l2); color: var(--text-secondary); font-size: 12px;';
-      summaryBtn.textContent = '更新摘要';
+    btn.addEventListener('click', function() {
+      handleQuickAction(config);
+    });
 
-      summaryBtn.addEventListener('mouseenter', function() {
-        summaryBtn.style.borderColor = 'var(--border-neutral-l2)';
-        summaryBtn.style.color = 'var(--text-default)';
-      });
-      summaryBtn.addEventListener('mouseleave', function() {
-        summaryBtn.style.borderColor = 'var(--border-neutral-l2)';
-        summaryBtn.style.color = 'var(--text-secondary)';
-      });
+    return btn;
+  }
 
-      summaryBtn.addEventListener('click', function() {
-        if (isGenerating) return;
-        var editorText = getEditorText();
+  // 渲染快捷按钮
+  function renderQuickButtons() {
+    var quickWrapper = document.getElementById('quick-buttons-wrapper');
+    var expandedWrapper = document.getElementById('expanded-buttons-wrapper');
+
+    if (!quickWrapper) return;
+
+    var config = getButtonConfig();
+
+    quickWrapper.innerHTML = '';
+    expandedWrapper.innerHTML = '';
+
+    config.quickButtons.forEach(function(btnConfig) {
+      quickWrapper.appendChild(createQuickButton(btnConfig, false));
+    });
+
+    config.expandedButtons.forEach(function(btnConfig) {
+      expandedWrapper.appendChild(createQuickButton(btnConfig, true));
+    });
+  }
+
+  // 处理快捷按钮点击
+  function handleQuickAction(config) {
+    if (isGenerating) {
+      showNotification('请等待当前操作完成', 'warn');
+      return;
+    }
+
+    var editorText = getEditorText();
+    var selection = window.getSelection();
+    var selectedText = selection ? selection.toString().trim() : '';
+
+    // 根据处理类型执行不同操作
+    switch (config.processType) {
+      case 'append':
         if (!editorText) {
           showNotification('编辑器中没有内容', 'warn');
           return;
         }
+        executeAIAction(config, editorText, 'append');
+        break;
 
-        var messagesContainer = document.querySelector('.flex-1.overflow-y-auto.px-4.py-4.flex.flex-col.gap-3');
-        if (!messagesContainer) return;
+      case 'replace':
+        if (!editorText) {
+          showNotification('编辑器中没有内容', 'warn');
+          return;
+        }
+        executeAIAction(config, editorText, 'replace');
+        break;
 
-        var sysMsg = createMessageEl('系统', '正在更新摘要...', 'user');
-        sysMsg.querySelector('.msg-content').style.background = 'var(--bg-overlay-l2)';
-        sysMsg.querySelector('.msg-content').style.color = 'var(--text-secondary)';
-        sysMsg.querySelector('.msg-content').style.fontSize = '12px';
-        messagesContainer.appendChild(sysMsg);
+      case 'replaceSelection':
+        if (!selectedText) {
+          showNotification('请先选中要处理的文本', 'warn');
+          return;
+        }
+        executeAIAction(config, selectedText, 'replaceSelection');
+        break;
 
-        var aiMsg = createMessageEl('AI', '', 'ai');
-        var aiContent = aiMsg.querySelector('.msg-content');
-        aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在生成摘要...</span>';
-        messagesContainer.appendChild(aiMsg);
+      case 'chat':
+        if (!editorText && config.action !== 'diagnose') {
+          showNotification('编辑器中没有内容', 'warn');
+          return;
+        }
+        executeAIAction(config, editorText, 'chat');
+        break;
+
+      case 'special':
+        handleSpecialAction(config);
+        break;
+
+      case 'memory':
+        if (!editorText) {
+          showNotification('编辑器中没有内容', 'warn');
+          return;
+        }
+        executeAIAction(config, editorText, 'memory');
+        break;
+
+      default:
+        executeAIAction(config, editorText, 'chat');
+    }
+  }
+
+  // 执行 AI 操作
+  function executeAIAction(config, text, processType) {
+    var messagesContainer = document.getElementById('chat-messages-container');
+    if (!messagesContainer) return;
+
+    // 添加用户消息
+    var userMsg = createMessageEl('用户', config.label + (processType === 'replaceSelection' ? '（选中文本）' : ''), 'user');
+    messagesContainer.appendChild(userMsg);
+
+    // 添加 AI 消息占位
+    var aiMsg = createMessageEl('AI', '', 'ai');
+    var aiContent = aiMsg.querySelector('.msg-content');
+    aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在生成...</span>';
+    messagesContainer.appendChild(aiMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // 更新状态栏
+    updateAIStatus('正在生成...');
+
+    isGenerating = true;
+    var context = getWorkContext();
+    var messages = window.AIService.PROMPTS[config.action](context, text);
+
+    var firstChunk = true;
+    var fullResult = '';
+
+    window.AIService.chat(messages, {
+      stream: true,
+      temperature: 0.8,
+      max_tokens: 4096,
+      onChunk: function(delta, fullContent) {
+        if (firstChunk) {
+          aiContent.innerHTML = '';
+          firstChunk = false;
+        }
+        fullResult = fullContent;
+        aiContent.innerHTML = formatAIResponse(fullContent);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      },
+      onDone: function(fullContent) {
+        if (firstChunk) {
+          aiContent.textContent = fullContent || '(空回复)';
+          fullResult = fullContent;
+        }
 
-        isGenerating = true;
-        var messages = window.AIService.PROMPTS.generateSummary(editorText);
+        // 根据处理类型处理结果
+        processAIResult(config, fullContent, processType, aiContent, messagesContainer);
 
-        var firstChunk = true;
-        window.AIService.chat(messages, {
-          stream: true,
-          temperature: 0.3,
-          max_tokens: 3000,
-          onChunk: function(delta, fullContent) {
-            if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
-            aiContent.innerHTML = escapeHtml(fullContent).replace(/\n/g, '<br>');
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          },
-          onDone: function(fullContent) {
-            if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; }
-            window.AIService.updateMemory('globalSummary', fullContent);
-            showNotification('全局摘要已更新并保存', 'info');
-            chatHistory.push({ role: 'user', content: '更新摘要' });
-            chatHistory.push({ role: 'assistant', content: fullContent });
-            isGenerating = false;
-          },
-          onError: function(err) {
-            aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
-            isGenerating = false;
+        chatHistory.push({ role: 'user', content: config.label + ': ' + text.substring(0, 200) });
+        chatHistory.push({ role: 'assistant', content: fullContent });
+        isGenerating = false;
+        updateAIStatus('就绪');
+      },
+      onError: function(err) {
+        aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
+        isGenerating = false;
+        updateAIStatus('就绪');
+      }
+    });
+  }
+
+  // 处理 AI 结果
+  function processAIResult(config, fullContent, processType, aiContent, messagesContainer) {
+    var article = document.querySelector('article');
+    var selection = window.getSelection();
+    var selectedText = selection ? selection.toString().trim() : '';
+
+    if (!article || !fullContent) return;
+
+    switch (processType) {
+      case 'append':
+        // 追加到编辑器
+        var appendParagraphs = processNovelText(fullContent, {
+          filterHeadings: true,
+          cleanMarkdown: true,
+          optimizeDialogue: true
+        });
+        var appendHtml = paragraphsToHtml(appendParagraphs, { textIndent: true });
+        article.insertAdjacentHTML('beforeend', appendHtml);
+        showNotification(config.label + '已追加（' + appendParagraphs.length + ' 段）', 'info');
+        break;
+
+      case 'replace':
+        // 替换全文或选中区域
+        var replaceParagraphs = processNovelText(fullContent, {
+          filterHeadings: true,
+          cleanMarkdown: true,
+          optimizeDialogue: false
+        });
+        var replaceHtml = paragraphsToHtml(replaceParagraphs, { textIndent: true });
+        if (selectedText && selection.rangeCount > 0) {
+          var range = selection.getRangeAt(0);
+          range.deleteContents();
+          var tempDiv = document.createElement('div');
+          tempDiv.innerHTML = replaceHtml;
+          var fragment = document.createDocumentFragment();
+          while (tempDiv.firstChild) {
+            fragment.appendChild(tempDiv.firstChild);
+          }
+          range.insertNode(fragment);
+          selection.removeAllRanges();
+        } else {
+          var existingTitle = article.querySelector('h1, h2, h3');
+          var titleHtml = existingTitle ? existingTitle.outerHTML + '\n' : '';
+          article.innerHTML = titleHtml + replaceHtml;
+        }
+        showNotification(config.label + '完成（' + replaceParagraphs.length + ' 段）', 'info');
+        break;
+
+      case 'replaceSelection':
+        // 替换选中内容
+        if (selectedText && selection.rangeCount > 0) {
+          var selParagraphs = processNovelText(fullContent, {
+            filterHeadings: true,
+            cleanMarkdown: true,
+            optimizeDialogue: true
+          });
+          var selHtml = paragraphsToHtml(selParagraphs, { textIndent: true });
+          var selRange = selection.getRangeAt(0);
+          selRange.deleteContents();
+          var selTempDiv = document.createElement('div');
+          selTempDiv.innerHTML = selHtml;
+          var selFragment = document.createDocumentFragment();
+          while (selTempDiv.firstChild) {
+            selFragment.appendChild(selTempDiv.firstChild);
+          }
+          selRange.insertNode(selFragment);
+          selection.removeAllRanges();
+          showNotification(config.label + '完成（' + selParagraphs.length + ' 段）', 'info');
+        }
+        break;
+
+      case 'memory':
+        // 更新记忆系统
+        window.AIService.updateMemory('globalSummary', fullContent);
+        showNotification('全局摘要已更新并保存', 'info');
+        break;
+
+      case 'chat':
+        // 仅在对话中展示，添加应用按钮
+        addApplyButton(aiContent, fullContent, config);
+        break;
+    }
+
+    if (typeof updateWordCount === 'function') {
+      updateWordCount();
+    }
+    if (typeof saveCurrentChapter === 'function') {
+      saveCurrentChapter();
+    }
+  }
+
+  // 为聊天消息添加应用按钮
+  function addApplyButton(aiContent, fullContent, config) {
+    var actionsDiv = document.createElement('div');
+    actionsDiv.style.cssText = 'margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;';
+
+    var applyBtn = document.createElement('button');
+    applyBtn.textContent = '应用到编辑器';
+    applyBtn.style.cssText = 'padding:4px 12px; height:28px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; font-size:12px; cursor:pointer;';
+    applyBtn.addEventListener('click', function() {
+      var article = document.querySelector('article');
+      if (!article) return;
+
+      var paragraphs = processNovelText(fullContent, {
+        filterHeadings: true,
+        cleanMarkdown: true,
+        optimizeDialogue: true
+      });
+      var html = paragraphsToHtml(paragraphs, { textIndent: true });
+      article.insertAdjacentHTML('beforeend', html);
+      showNotification('内容已追加到编辑器', 'info');
+
+      if (typeof updateWordCount === 'function') updateWordCount();
+      if (typeof saveCurrentChapter === 'function') saveCurrentChapter();
+    });
+
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = '复制';
+    copyBtn.style.cssText = 'padding:4px 12px; height:28px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l2); border-radius:6px; font-size:12px; cursor:pointer;';
+    copyBtn.addEventListener('click', function() {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(fullContent).then(function() {
+          showNotification('已复制到剪贴板', 'info');
+        });
+      }
+    });
+
+    actionsDiv.appendChild(applyBtn);
+    actionsDiv.appendChild(copyBtn);
+    aiContent.appendChild(actionsDiv);
+  }
+
+  // 处理特殊操作（自动写作、排版）
+  function handleSpecialAction(config) {
+    if (config.action === 'autoWrite') {
+      showAutoWriteDialog();
+    } else if (config.action === 'format') {
+      showFormatDialog();
+    }
+  }
+
+  // 显示自动写作对话框
+  function showAutoWriteDialog() {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center;';
+
+    var dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--bg-base-secondary); border:1px solid var(--border-neutral-l2); border-radius:12px; padding:24px; width:420px; max-width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+
+    dialog.innerHTML =
+      '<h3 style="font-size:16px; color:var(--text-default); font-weight:600; margin-bottom:16px;">自动写作模式</h3>' +
+      '<div style="display:flex; flex-direction:column; gap:12px;">' +
+        '<button class="auto-write-mode-btn" data-mode="direct" style="display:flex; align-items:center; gap:12px; padding:12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:8px; cursor:pointer; text-align:left;">' +
+          '<div style="width:32px; height:32px; border-radius:6px; background:var(--bg-brand); display:flex; align-items:center; justify-content:center;"><img src="../assets/icons/dl-builtin-trae/play.svg" width="16" height="16" alt=""></div>' +
+          '<div><div style="font-size:13px; color:var(--text-default); font-weight:500;">直接开始</div><div style="font-size:11px; color:var(--text-tertiary);">AI直接续写，每段询问是否继续</div></div>' +
+        '</button>' +
+        '<button class="auto-write-mode-btn" data-mode="outline" style="display:flex; align-items:center; gap:12px; padding:12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:8px; cursor:pointer; text-align:left;">' +
+          '<div style="width:32px; height:32px; border-radius:6px; background:var(--bg-overlay-l2); display:flex; align-items:center; justify-content:center;"><img src="../assets/icons/dl-builtin-trae/list.svg" width="16" height="16" alt=""></div>' +
+          '<div><div style="font-size:13px; color:var(--text-default); font-weight:500;">先定大纲</div><div style="font-size:11px; color:var(--text-tertiary);">生成段落大纲，确认后按大纲写</div></div>' +
+        '</button>' +
+        '<button class="auto-write-mode-btn" data-mode="quick" style="display:flex; align-items:center; gap:12px; padding:12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:8px; cursor:pointer; text-align:left;">' +
+          '<div style="width:32px; height:32px; border-radius:6px; background:var(--bg-overlay-l2); display:flex; align-items:center; justify-content:center;"><img src="../assets/icons/dl-builtin-trae/settings.svg" width="16" height="16" alt=""></div>' +
+          '<div><div style="font-size:13px; color:var(--text-default); font-weight:500;">快速设定</div><div style="font-size:11px; color:var(--text-tertiary);">设置字数、主题、关键事件等</div></div>' +
+        '</button>' +
+        '<button class="auto-write-mode-btn" data-mode="interactive" style="display:flex; align-items:center; gap:12px; padding:12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:8px; cursor:pointer; text-align:left;">' +
+          '<div style="width:32px; height:32px; border-radius:6px; background:var(--bg-overlay-l2); display:flex; align-items:center; justify-content:center;"><img src="../assets/icons/dl-builtin-trae/edit.svg" width="16" height="16" alt=""></div>' +
+          '<div><div style="font-size:13px; color:var(--text-default); font-weight:500;">边写边调</div><div style="font-size:11px; color:var(--text-tertiary);">默认模式，随时打断调整</div></div>' +
+        '</button>' +
+      '</div>' +
+      '<div style="margin-top:16px; display:flex; justify-content:flex-end;">' +
+        '<button class="cancel-auto-write" style="padding:6px 16px; height:32px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l1); border-radius:6px; cursor:pointer; font-size:13px;">取消</button>' +
+      '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // 事件绑定
+    dialog.querySelector('.cancel-auto-write').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    var modeBtns = dialog.querySelectorAll('.auto-write-mode-btn');
+    modeBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var mode = btn.getAttribute('data-mode');
+        overlay.remove();
+        startAutoWrite(mode);
+      });
+      btn.addEventListener('mouseenter', function() {
+        btn.style.borderColor = 'var(--border-brand)';
+      });
+      btn.addEventListener('mouseleave', function() {
+        btn.style.borderColor = 'var(--border-neutral-l2)';
+      });
+    });
+  }
+
+  // 开始自动写作
+  function startAutoWrite(mode) {
+    autoWriteMode = mode;
+
+    if (mode === 'quick') {
+      showQuickSettingsDialog();
+      return;
+    }
+
+    if (mode === 'outline') {
+      generateOutlineForAutoWrite();
+      return;
+    }
+
+    // 直接开始或边写边调模式
+    executeAutoWriteDirect();
+  }
+
+  // 显示快速设定对话框
+  function showQuickSettingsDialog() {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center;';
+
+    var dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--bg-base-secondary); border:1px solid var(--border-neutral-l2); border-radius:12px; padding:24px; width:440px; max-width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+
+    dialog.innerHTML =
+      '<h3 style="font-size:16px; color:var(--text-default); font-weight:600; margin-bottom:16px;">快速设定</h3>' +
+      '<div style="display:flex; flex-direction:column; gap:12px;">' +
+        '<div style="display:flex; flex-direction:column; gap:4px;">' +
+          '<label style="font-size:12px; color:var(--text-tertiary);">目标字数</label>' +
+          '<input id="auto-word-count" type="number" placeholder="例如: 2000" style="height:32px; padding:0 12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-default); font-size:13px;">' +
+        '</div>' +
+        '<div style="display:flex; flex-direction:column; gap:4px;">' +
+          '<label style="font-size:12px; color:var(--text-tertiary);">本章主题</label>' +
+          '<input id="auto-theme" type="text" placeholder="例如: 主角觉醒" style="height:32px; padding:0 12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-default); font-size:13px;">' +
+        '</div>' +
+        '<div style="display:flex; flex-direction:column; gap:4px;">' +
+          '<label style="font-size:12px; color:var(--text-tertiary);">关键事件（用逗号分隔）</label>' +
+          '<input id="auto-events" type="text" placeholder="例如: 相遇,冲突,和解" style="height:32px; padding:0 12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-default); font-size:13px;">' +
+        '</div>' +
+        '<div style="display:flex; flex-direction:column; gap:4px;">' +
+          '<label style="font-size:12px; color:var(--text-tertiary);">避免内容</label>' +
+          '<input id="auto-avoid" type="text" placeholder="例如: 血腥描写,过度暴力" style="height:32px; padding:0 12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-default); font-size:13px;">' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:16px; display:flex; gap:8px; justify-content:flex-end;">' +
+        '<button class="cancel-quick-settings" style="padding:6px 16px; height:32px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l1); border-radius:6px; cursor:pointer; font-size:13px;">取消</button>' +
+        '<button class="start-quick-write" style="padding:6px 16px; height:32px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; cursor:pointer; font-size:13px;">开始写作</button>' +
+      '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    dialog.querySelector('.cancel-quick-settings').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    dialog.querySelector('.start-quick-write').addEventListener('click', function() {
+      var settings = {
+        targetWords: dialog.querySelector('#auto-word-count').value,
+        theme: dialog.querySelector('#auto-theme').value,
+        keyEvents: dialog.querySelector('#auto-events').value,
+        avoid: dialog.querySelector('#auto-avoid').value
+      };
+      overlay.remove();
+      executeAutoWriteWithSettings(settings);
+    });
+  }
+
+  // 执行自动写作 - 直接模式
+  function executeAutoWriteDirect() {
+    var editorText = getEditorText();
+    if (!editorText) {
+      showNotification('编辑器中没有内容', 'warn');
+      return;
+    }
+
+    var messagesContainer = document.getElementById('chat-messages-container');
+    if (!messagesContainer) return;
+
+    var userMsg = createMessageEl('用户', '自动写作：直接开始', 'user');
+    messagesContainer.appendChild(userMsg);
+
+    var aiMsg = createMessageEl('AI', '', 'ai');
+    var aiContent = aiMsg.querySelector('.msg-content');
+    aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在生成...</span>';
+    messagesContainer.appendChild(aiMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    updateAIStatus('正在自动写作...');
+
+    isGenerating = true;
+    var context = getWorkContext();
+    var messages = window.AIService.PROMPTS.autoWriteDirect(context, editorText);
+
+    var firstChunk = true;
+    var fullResult = '';
+
+    window.AIService.chat(messages, {
+      stream: true,
+      temperature: 0.8,
+      max_tokens: 2000,
+      onChunk: function(delta, fullContent) {
+        if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
+        fullResult = fullContent;
+        aiContent.innerHTML = formatAIResponse(fullContent);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      },
+      onDone: function(fullContent) {
+        if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; fullResult = fullContent; }
+
+        // 追加到编辑器
+        var article = document.querySelector('article');
+        if (article && fullContent) {
+          var paragraphs = processNovelText(fullContent, { filterHeadings: true, cleanMarkdown: true, optimizeDialogue: true });
+          var html = paragraphsToHtml(paragraphs, { textIndent: true });
+          article.insertAdjacentHTML('beforeend', html);
+          showNotification('已写入 ' + paragraphs.length + ' 段，可以继续或调整', 'info');
+
+          // 添加继续按钮
+          addContinueWriteButton(aiContent, messagesContainer);
+        }
+
+        chatHistory.push({ role: 'user', content: '自动写作' });
+        chatHistory.push({ role: 'assistant', content: fullContent });
+        isGenerating = false;
+        updateAIStatus('就绪');
+
+        if (typeof updateWordCount === 'function') updateWordCount();
+        if (typeof saveCurrentChapter === 'function') saveCurrentChapter();
+      },
+      onError: function(err) {
+        aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
+        isGenerating = false;
+        updateAIStatus('就绪');
+      }
+    });
+  }
+
+  // 添加继续写作按钮
+  function addContinueWriteButton(aiContent, messagesContainer) {
+    var actionsDiv = document.createElement('div');
+    actionsDiv.style.cssText = 'margin-top:12px; display:flex; gap:8px;';
+
+    var continueBtn = document.createElement('button');
+    continueBtn.textContent = '继续写作';
+    continueBtn.style.cssText = 'padding:4px 12px; height:28px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; font-size:12px; cursor:pointer;';
+    continueBtn.addEventListener('click', function() {
+      executeAutoWriteDirect();
+    });
+
+    var stopBtn = document.createElement('button');
+    stopBtn.textContent = '完成';
+    stopBtn.style.cssText = 'padding:4px 12px; height:28px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l2); border-radius:6px; font-size:12px; cursor:pointer;';
+    stopBtn.addEventListener('click', function() {
+      showNotification('自动写作已完成', 'info');
+    });
+
+    actionsDiv.appendChild(continueBtn);
+    actionsDiv.appendChild(stopBtn);
+    aiContent.appendChild(actionsDiv);
+  }
+
+  // 执行自动写作 - 带设定
+  function executeAutoWriteWithSettings(settings) {
+    var editorText = getEditorText();
+
+    var messagesContainer = document.getElementById('chat-messages-container');
+    if (!messagesContainer) return;
+
+    var settingsText = '';
+    if (settings.targetWords) settingsText += '目标字数: ' + settings.targetWords + '字 ';
+    if (settings.theme) settingsText += '主题: ' + settings.theme + ' ';
+    if (settings.keyEvents) settingsText += '关键事件: ' + settings.keyEvents;
+
+    var userMsg = createMessageEl('用户', '自动写作：' + settingsText, 'user');
+    messagesContainer.appendChild(userMsg);
+
+    var aiMsg = createMessageEl('AI', '', 'ai');
+    var aiContent = aiMsg.querySelector('.msg-content');
+    aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在按设定生成...</span>';
+    messagesContainer.appendChild(aiMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    updateAIStatus('正在按设定写作...');
+
+    isGenerating = true;
+    var context = getWorkContext();
+    var messages = window.AIService.PROMPTS.autoWriteWithSettings(context, editorText || '', settings);
+
+    var firstChunk = true;
+    var fullResult = '';
+
+    window.AIService.chat(messages, {
+      stream: true,
+      temperature: 0.8,
+      max_tokens: 3000,
+      onChunk: function(delta, fullContent) {
+        if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
+        fullResult = fullContent;
+        aiContent.innerHTML = formatAIResponse(fullContent);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      },
+      onDone: function(fullContent) {
+        if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; fullResult = fullContent; }
+
+        var article = document.querySelector('article');
+        if (article && fullContent) {
+          var paragraphs = processNovelText(fullContent, { filterHeadings: true, cleanMarkdown: true, optimizeDialogue: true });
+          var html = paragraphsToHtml(paragraphs, { textIndent: true });
+          article.insertAdjacentHTML('beforeend', html);
+          showNotification('已写入 ' + paragraphs.length + ' 段', 'info');
+          addContinueWriteButton(aiContent, messagesContainer);
+        }
+
+        chatHistory.push({ role: 'user', content: '自动写作（带设定）' });
+        chatHistory.push({ role: 'assistant', content: fullContent });
+        isGenerating = false;
+        updateAIStatus('就绪');
+
+        if (typeof updateWordCount === 'function') updateWordCount();
+        if (typeof saveCurrentChapter === 'function') saveCurrentChapter();
+      },
+      onError: function(err) {
+        aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
+        isGenerating = false;
+        updateAIStatus('就绪');
+      }
+    });
+  }
+
+  // 生成大纲（自动写作大纲模式）
+  function generateOutlineForAutoWrite() {
+    var editorText = getEditorText();
+    if (!editorText) {
+      showNotification('编辑器中没有内容', 'warn');
+      return;
+    }
+
+    var messagesContainer = document.getElementById('chat-messages-container');
+    if (!messagesContainer) return;
+
+    var userMsg = createMessageEl('用户', '生成段落大纲', 'user');
+    messagesContainer.appendChild(userMsg);
+
+    var aiMsg = createMessageEl('AI', '', 'ai');
+    var aiContent = aiMsg.querySelector('.msg-content');
+    aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在生成大纲...</span>';
+    messagesContainer.appendChild(aiMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    updateAIStatus('正在生成大纲...');
+
+    isGenerating = true;
+    var context = getWorkContext();
+    var messages = window.AIService.PROMPTS.autoWriteOutline(context, editorText, '');
+
+    var firstChunk = true;
+    var outlineContent = '';
+
+    window.AIService.chat(messages, {
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 1500,
+      onChunk: function(delta, fullContent) {
+        if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
+        outlineContent = fullContent;
+        aiContent.innerHTML = formatAIResponse(fullContent);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      },
+      onDone: function(fullContent) {
+        if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; outlineContent = fullContent; }
+
+        // 解析大纲并添加确认按钮
+        var outlineItems = parseOutline(fullContent);
+        addOutlineConfirmButtons(aiContent, outlineItems, messagesContainer);
+
+        chatHistory.push({ role: 'user', content: '生成段落大纲' });
+        chatHistory.push({ role: 'assistant', content: fullContent });
+        isGenerating = false;
+        updateAIStatus('就绪');
+      },
+      onError: function(err) {
+        aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
+        isGenerating = false;
+        updateAIStatus('就绪');
+      }
+    });
+  }
+
+  // 解析大纲
+  function parseOutline(outlineText) {
+    var lines = outlineText.split('\n');
+    var items = [];
+    lines.forEach(function(line) {
+      line = line.trim();
+      if (/^\d+[\.\、\:]/.test(line) || /^[一二三四五六七八九十]+[\.\、\:]/.test(line)) {
+        items.push(line);
+      }
+    });
+    return items;
+  }
+
+  // 添加大纲确认按钮
+  function addOutlineConfirmButtons(aiContent, outlineItems, messagesContainer) {
+    var actionsDiv = document.createElement('div');
+    actionsDiv.style.cssText = 'margin-top:16px; padding-top:12px; border-top:1px solid var(--border-neutral-l2);';
+
+    actionsDiv.innerHTML =
+      '<div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">确认大纲后开始写作：</div>' +
+      '<div style="display:flex; gap:8px;">' +
+        '<button class="confirm-outline-btn" style="padding:6px 16px; height:32px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; cursor:pointer; font-size:13px;">确认并开始写作</button>' +
+        '<button class="regenerate-outline-btn" style="padding:6px 16px; height:32px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l2); border-radius:6px; cursor:pointer; font-size:13px;">重新生成</button>' +
+      '</div>';
+
+    actionsDiv.querySelector('.confirm-outline-btn').addEventListener('click', function() {
+      if (outlineItems.length > 0) {
+        startWritingByOutline(outlineItems, 0, messagesContainer);
+      } else {
+        showNotification('无法解析大纲，请手动描述', 'warn');
+      }
+    });
+
+    actionsDiv.querySelector('.regenerate-outline-btn').addEventListener('click', function() {
+      generateOutlineForAutoWrite();
+    });
+
+    aiContent.appendChild(actionsDiv);
+  }
+
+  // 按大纲写作
+  function startWritingByOutline(outlineItems, currentIndex, messagesContainer) {
+    if (currentIndex >= outlineItems.length) {
+      showNotification('按大纲写作完成', 'info');
+      return;
+    }
+
+    var outlineItem = outlineItems[currentIndex];
+    var prevItem = currentIndex > 0 ? outlineItems[currentIndex - 1] : null;
+
+    var userMsg = createMessageEl('用户', '写作：' + outlineItem, 'user');
+    messagesContainer.appendChild(userMsg);
+
+    var aiMsg = createMessageEl('AI', '', 'ai');
+    var aiContent = aiMsg.querySelector('.msg-content');
+    aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在生成...</span>';
+    messagesContainer.appendChild(aiMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    updateAIStatus('正在写作：' + outlineItem);
+
+    isGenerating = true;
+    var context = getWorkContext();
+    var editorText = getEditorText();
+    var messages = window.AIService.PROMPTS.autoWriteByOutline(context, editorText, outlineItem, prevItem);
+
+    var firstChunk = true;
+
+    window.AIService.chat(messages, {
+      stream: true,
+      temperature: 0.8,
+      max_tokens: 1500,
+      onChunk: function(delta, fullContent) {
+        if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
+        aiContent.innerHTML = formatAIResponse(fullContent);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      },
+      onDone: function(fullContent) {
+        if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; }
+
+        var article = document.querySelector('article');
+        if (article && fullContent) {
+          var paragraphs = processNovelText(fullContent, { filterHeadings: true, cleanMarkdown: true, optimizeDialogue: true });
+          var html = paragraphsToHtml(paragraphs, { textIndent: true });
+          article.insertAdjacentHTML('beforeend', html);
+
+          // 添加继续按钮
+          var actionsDiv = document.createElement('div');
+          actionsDiv.style.cssText = 'margin-top:12px; display:flex; gap:8px;';
+
+          if (currentIndex < outlineItems.length - 1) {
+            var nextBtn = document.createElement('button');
+            nextBtn.textContent = '写下一段';
+            nextBtn.style.cssText = 'padding:4px 12px; height:28px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; font-size:12px; cursor:pointer;';
+            nextBtn.addEventListener('click', function() {
+              startWritingByOutline(outlineItems, currentIndex + 1, messagesContainer);
+            });
+            actionsDiv.appendChild(nextBtn);
+          }
+
+          var finishBtn = document.createElement('button');
+          finishBtn.textContent = '完成写作';
+          finishBtn.style.cssText = 'padding:4px 12px; height:28px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l2); border-radius:6px; font-size:12px; cursor:pointer;';
+          actionsDiv.appendChild(finishBtn);
+
+          aiContent.appendChild(actionsDiv);
+        }
+
+        chatHistory.push({ role: 'user', content: outlineItem });
+        chatHistory.push({ role: 'assistant', content: fullContent });
+        isGenerating = false;
+        updateAIStatus('就绪');
+
+        if (typeof updateWordCount === 'function') updateWordCount();
+        if (typeof saveCurrentChapter === 'function') saveCurrentChapter();
+      },
+      onError: function(err) {
+        aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
+        isGenerating = false;
+        updateAIStatus('就绪');
+      }
+    });
+  }
+
+  // 显示排版对话框
+  function showFormatDialog() {
+    var editorText = getEditorText();
+    if (!editorText) {
+      showNotification('编辑器中没有内容', 'warn');
+      return;
+    }
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center;';
+
+    var dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--bg-base-secondary); border:1px solid var(--border-neutral-l2); border-radius:12px; padding:24px; width:420px; max-width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+
+    dialog.innerHTML =
+      '<h3 style="font-size:16px; color:var(--text-default); font-weight:600; margin-bottom:16px;">智能排版</h3>' +
+      '<div style="display:flex; flex-direction:column; gap:12px;">' +
+        '<button class="format-btn" data-type="dialogue" style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:8px; cursor:pointer;">' +
+          '<div><div style="font-size:13px; color:var(--text-default);">对话格式化</div><div style="font-size:11px; color:var(--text-tertiary);">优化对话标签和分段</div></div>' +
+          '<img src="../assets/icons/dl-builtin-trae/message-circle.svg" width="18" height="18" alt="" style="opacity:0.6;">' +
+        '</button>' +
+        '<button class="format-btn" data-type="timeline" style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:var(--bg-base-tertiary); border:1px solid var(--border-neutral-l2); border-radius:8px; cursor:pointer;">' +
+          '<div><div style="font-size:13px; color:var(--text-default);">时间线检查</div><div style="font-size:11px; color:var(--text-tertiary);">检查时间顺序一致性</div></div>' +
+          '<img src="../assets/icons/dl-builtin-trae/clock.svg" width="18" height="18" alt="" style="opacity:0.6;">' +
+        '</button>' +
+        '<div style="border-top:1px solid var(--border-neutral-l2); padding-top:12px; margin-top:4px;">' +
+          '<div style="font-size:12px; color:var(--text-tertiary); margin-bottom:8px;">导出为平台格式</div>' +
+          '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+            '<button class="export-btn" data-platform="起点" style="padding:6px 12px; height:28px; background:var(--bg-overlay-l1); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-secondary); font-size:12px; cursor:pointer;">起点</button>' +
+            '<button class="export-btn" data-platform="晋江" style="padding:6px 12px; height:28px; background:var(--bg-overlay-l1); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-secondary); font-size:12px; cursor:pointer;">晋江</button>' +
+            '<button class="export-btn" data-platform="番茄" style="padding:6px 12px; height:28px; background:var(--bg-overlay-l1); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-secondary); font-size:12px; cursor:pointer;">番茄</button>' +
+            '<button class="export-btn" data-platform="知乎" style="padding:6px 12px; height:28px; background:var(--bg-overlay-l1); border:1px solid var(--border-neutral-l2); border-radius:6px; color:var(--text-secondary); font-size:12px; cursor:pointer;">知乎</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:16px; display:flex; justify-content:flex-end;">' +
+        '<button class="close-format-dialog" style="padding:6px 16px; height:32px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l1); border-radius:6px; cursor:pointer; font-size:13px;">关闭</button>' +
+      '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    dialog.querySelector('.close-format-dialog').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    // 格式化按钮
+    var formatBtns = dialog.querySelectorAll('.format-btn');
+    formatBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var type = btn.getAttribute('data-type');
+        overlay.remove();
+        executeFormat(type, editorText);
+      });
+      btn.addEventListener('mouseenter', function() { btn.style.borderColor = 'var(--border-brand)'; });
+      btn.addEventListener('mouseleave', function() { btn.style.borderColor = 'var(--border-neutral-l2)'; });
+    });
+
+    // 导出按钮
+    var exportBtns = dialog.querySelectorAll('.export-btn');
+    exportBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var platform = btn.getAttribute('data-platform');
+        overlay.remove();
+        executeExport(platform, editorText);
+      });
+    });
+  }
+
+  // 执行格式化
+  function executeFormat(type, text) {
+    var messagesContainer = document.getElementById('chat-messages-container');
+    if (!messagesContainer) return;
+
+    var actionName = type === 'dialogue' ? '对话格式化' : '时间线检查';
+    var userMsg = createMessageEl('用户', actionName, 'user');
+    messagesContainer.appendChild(userMsg);
+
+    var aiMsg = createMessageEl('AI', '', 'ai');
+    var aiContent = aiMsg.querySelector('.msg-content');
+    aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在处理...</span>';
+    messagesContainer.appendChild(aiMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    isGenerating = true;
+    var messages = type === 'dialogue'
+      ? window.AIService.PROMPTS.formatDialogue(text)
+      : window.AIService.PROMPTS.checkTimeline(text);
+
+    var firstChunk = true;
+
+    window.AIService.chat(messages, {
+      stream: true,
+      temperature: 0.3,
+      max_tokens: 4000,
+      onChunk: function(delta, fullContent) {
+        if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
+        aiContent.innerHTML = formatAIResponse(fullContent);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      },
+      onDone: function(fullContent) {
+        if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; }
+
+        if (type === 'dialogue') {
+          addApplyButton(aiContent, fullContent, { label: '格式化' });
+        }
+
+        chatHistory.push({ role: 'user', content: actionName });
+        chatHistory.push({ role: 'assistant', content: fullContent });
+        isGenerating = false;
+      },
+      onError: function(err) {
+        aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
+        isGenerating = false;
+      }
+    });
+  }
+
+  // 执行导出
+  function executeExport(platform, text) {
+    var messagesContainer = document.getElementById('chat-messages-container');
+    if (!messagesContainer) return;
+
+    var userMsg = createMessageEl('用户', '导出为 ' + platform + ' 格式', 'user');
+    messagesContainer.appendChild(userMsg);
+
+    var aiMsg = createMessageEl('AI', '', 'ai');
+    var aiContent = aiMsg.querySelector('.msg-content');
+    aiContent.innerHTML = '<span style="color: var(--text-tertiary);">正在转换格式...</span>';
+    messagesContainer.appendChild(aiMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    isGenerating = true;
+    var messages = window.AIService.PROMPTS.exportForPlatform(text, platform);
+
+    var firstChunk = true;
+
+    window.AIService.chat(messages, {
+      stream: true,
+      temperature: 0.2,
+      max_tokens: 8000,
+      onChunk: function(delta, fullContent) {
+        if (firstChunk) { aiContent.innerHTML = ''; firstChunk = false; }
+        aiContent.innerHTML = formatAIResponse(fullContent);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      },
+      onDone: function(fullContent) {
+        if (firstChunk) { aiContent.textContent = fullContent || '(空回复)'; }
+
+        // 添加复制按钮
+        var actionsDiv = document.createElement('div');
+        actionsDiv.style.cssText = 'margin-top:12px; display:flex; gap:8px;';
+
+        var copyBtn = document.createElement('button');
+        copyBtn.textContent = '复制全文';
+        copyBtn.style.cssText = 'padding:4px 12px; height:28px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; font-size:12px; cursor:pointer;';
+        copyBtn.addEventListener('click', function() {
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(fullContent).then(function() {
+              showNotification('已复制到剪贴板，可直接粘贴到 ' + platform, 'info');
+            });
           }
         });
+
+        actionsDiv.appendChild(copyBtn);
+        aiContent.appendChild(actionsDiv);
+
+        chatHistory.push({ role: 'user', content: '导出 ' + platform + ' 格式' });
+        chatHistory.push({ role: 'assistant', content: fullContent });
+        isGenerating = false;
+      },
+      onError: function(err) {
+        aiContent.innerHTML = '<span style="color: #f87171;">调用失败: ' + escapeHtml(err.message) + '</span>';
+        isGenerating = false;
+      }
+    });
+  }
+
+  // ========== 主初始化函数 ==========
+  function initQuickActions() {
+    // 渲染快捷按钮
+    renderQuickButtons();
+
+    // 展开更多按钮
+    var expandBtn = document.getElementById('expand-actions-btn');
+    var expandedContainer = document.getElementById('expanded-actions-container');
+
+    if (expandBtn && expandedContainer) {
+      expandBtn.addEventListener('click', function() {
+        expandedContainer.classList.toggle('hidden');
+        var icon = expandBtn.querySelector('img');
+        if (expandedContainer.classList.contains('hidden')) {
+          icon.style.transform = 'rotate(0deg)';
+          expandBtn.lastChild.textContent = '更多功能';
+        } else {
+          icon.style.transform = 'rotate(180deg)';
+          expandBtn.lastChild.textContent = '收起';
+        }
+      });
+    }
+
+    // 自定义按钮
+    var customizeBtn = document.getElementById('customize-buttons-btn');
+    if (customizeBtn) {
+      customizeBtn.addEventListener('click', function() {
+        showCustomizeButtonsDialog();
+      });
+    }
+  }
+
+  // 显示自定义按钮对话框
+  function showCustomizeButtonsDialog() {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center;';
+
+    var dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--bg-base-secondary); border:1px solid var(--border-neutral-l2); border-radius:12px; padding:24px; width:500px; max-width:90%; max-height:70vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+
+    var allButtons = DEFAULT_QUICK_BUTTONS.concat(EXPANDED_BUTTONS);
+    var buttonListHtml = allButtons.map(function(btn) {
+      return '<div class="button-item" data-id="' + btn.id + '" style="display:flex; align-items:center; gap:12px; padding:8px; border:1px solid var(--border-neutral-l2); border-radius:6px; margin-bottom:8px; cursor:move;">' +
+        '<input type="checkbox" class="button-toggle" data-id="' + btn.id + '" style="width:16px; height:16px;">' +
+        '<span style="font-size:13px; color:var(--text-default); flex:1;">' + btn.label + '</span>' +
+        '<span style="font-size:11px; color:var(--text-tertiary);">' + btn.desc + '</span>' +
+      '</div>';
+    }).join('');
+
+    dialog.innerHTML =
+      '<h3 style="font-size:16px; color:var(--text-default); font-weight:600; margin-bottom:16px;">自定义快捷按钮</h3>' +
+      '<p style="font-size:12px; color:var(--text-tertiary); margin-bottom:12px;">勾选显示的按钮，拖动调整顺序。前5个显示在快捷区，其余在"更多功能"中。</p>' +
+      '<div id="button-list" style="max-height:300px; overflow-y:auto;">' + buttonListHtml + '</div>' +
+      '<div style="margin-top:16px; display:flex; gap:8px; justify-content:flex-end;">' +
+        '<button class="cancel-customize" style="padding:6px 16px; height:32px; background:transparent; color:var(--text-secondary); border:1px solid var(--border-neutral-l1); border-radius:6px; cursor:pointer; font-size:13px;">取消</button>' +
+        '<button class="save-customize" style="padding:6px 16px; height:32px; background:var(--bg-brand); color:var(--text-onbrand); border:none; border-radius:6px; cursor:pointer; font-size:13px;">保存</button>' +
+      '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // 加载当前配置
+    var currentConfig = getButtonConfig();
+    var enabledIds = currentConfig.quickButtons.map(function(b) { return b.id; });
+    var checkboxes = dialog.querySelectorAll('.button-toggle');
+    checkboxes.forEach(function(cb) {
+      cb.checked = enabledIds.indexOf(cb.getAttribute('data-id')) !== -1;
+    });
+
+    // 事件
+    dialog.querySelector('.cancel-customize').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    dialog.querySelector('.save-customize').addEventListener('click', function() {
+      var checkedIds = [];
+      dialog.querySelectorAll('.button-toggle:checked').forEach(function(cb) {
+        checkedIds.push(cb.getAttribute('data-id'));
       });
 
-      quickActionsContainer.appendChild(summaryBtn);
-    }
+      var newQuickButtons = [];
+      var newExpandedButtons = [];
+
+      checkedIds.forEach(function(id, index) {
+        var btnConfig = allButtons.find(function(b) { return b.id === id; });
+        if (btnConfig) {
+          if (index < 5) {
+            newQuickButtons.push(btnConfig);
+          } else {
+            newExpandedButtons.push(btnConfig);
+          }
+        }
+      });
+
+      // 添加未勾选的到扩展区
+      allButtons.forEach(function(btn) {
+        if (checkedIds.indexOf(btn.id) === -1) {
+          newExpandedButtons.push(btn);
+        }
+      });
+
+      saveCustomButtons({
+        quickButtons: newQuickButtons,
+        expandedButtons: newExpandedButtons
+      });
+
+      renderQuickButtons();
+      overlay.remove();
+      showNotification('快捷按钮已更新', 'info');
+    });
   }
 
   // ========== 通知提示 ==========

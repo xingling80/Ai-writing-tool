@@ -499,8 +499,8 @@
           </div>
         </section>
 
-        <!-- ========== RIGHT PANEL: AI Writing Assistant (340px) ========== -->
-        <aside class="flex flex-col flex-shrink-0" style="width: 340px; border-left: 1px solid var(--border-neutral-l1); background: var(--bg-base-default);">
+        <!-- ========== RIGHT PANEL: AI Writing Assistant (360px) ========== -->
+        <aside id="ai-assistant-panel" class="flex flex-col flex-shrink-0" style="width: 360px; border-left: 1px solid var(--border-neutral-l1); background: var(--bg-base-default);">
           <!-- Panel Header -->
           <div class="flex items-center justify-between px-4 flex-shrink-0" style="height: 40px;">
             <div class="flex items-center gap-2">
@@ -508,80 +508,83 @@
               <span style="font-size: 13px; font-weight: 500; color: var(--text-default);">AI 创作助手</span>
             </div>
             <div class="flex items-center gap-1">
+              <button id="customize-buttons-btn" class="flex items-center justify-center w-6 h-6 rounded cursor-pointer" style="color: var(--icon-tertiary); border: none; background: transparent;" title="自定义按钮">
+                <img src="../assets/icons/dl-builtin-trae/settings.svg" width="14" height="14" alt="" class="opacity-60">
+              </button>
               <button id="clear-chat-btn" class="flex items-center justify-center w-6 h-6 rounded cursor-pointer" style="color: var(--icon-tertiary); border: none; background: transparent;" title="清空对话">
                 <img src="../assets/icons/dl-builtin-trae/trash.svg" width="14" height="14" alt="" class="opacity-60">
               </button>
-              <div class="flex items-center justify-center w-6 h-6 rounded cursor-pointer" style="color: var(--icon-tertiary);">
-                <img src="../assets/icons/dl-builtin-trae/sidebar-right.svg" width="14" height="14" alt="" class="opacity-60">
-              </div>
             </div>
           </div>
 
           <!-- Context Bar -->
           <div class="flex items-center justify-between px-4 flex-shrink-0" style="height: 32px; border-bottom: 1px solid var(--border-neutral-l1);">
-            <span style="font-size: 11px; color: var(--text-tertiary);">未选择 · 第一章</span>
-            <a href="#" style="font-size: 11px; color: var(--icon-brand); text-decoration: none;">查看大纲</a>
+            <span id="ai-context-info" style="font-size: 11px; color: var(--text-tertiary);">未选择作品</span>
+            <a href="#" id="view-outline-link" style="font-size: 11px; color: var(--icon-brand); text-decoration: none;">查看大纲</a>
           </div>
 
-          <!-- Chat Messages -->
-          <div class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3" style="min-height: 0;">
-            <!-- AI Message 1 -->
+          <!-- ========== 第一层：快捷按钮区 ========== -->
+          <div id="quick-actions-container" class="flex-shrink-0" style="padding: 8px 12px; border-bottom: 1px solid var(--border-neutral-l1);">
+            <div class="flex items-center gap-1.5 flex-wrap" id="quick-buttons-wrapper">
+              <!-- 快捷按钮将动态生成 -->
+            </div>
+            <!-- 展开更多按钮 -->
+            <button id="expand-actions-btn" class="flex items-center justify-center w-full mt-2 rounded cursor-pointer" style="height: 24px; background: transparent; border: 1px dashed var(--border-neutral-l2); color: var(--text-tertiary); font-size: 11px;">
+              <img src="../assets/icons/dl-builtin-trae/chevron-down.svg" width="12" height="12" alt="" class="opacity-50 mr-1">
+              更多功能
+            </button>
+            <!-- 扩展按钮区（默认隐藏） -->
+            <div id="expanded-actions-container" class="hidden mt-2 pt-2" style="border-top: 1px dashed var(--border-neutral-l2);">
+              <div class="flex flex-col gap-1.5" id="expanded-buttons-wrapper">
+                <!-- 扩展按钮将动态生成 -->
+              </div>
+            </div>
+          </div>
+
+          <!-- ========== 第二层：对话消息区 ========== -->
+          <div id="chat-messages-container" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3" style="min-height: 0;">
+            <!-- 欢迎消息 -->
             <div class="flex gap-2" style="max-width: 100%;">
               <div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style="background: var(--bg-brand); margin-top: 2px;">
                 <img src="../assets/icons/dl-builtin-trae/sparkles.32f08c.svg" width="12" height="12" alt="">
               </div>
               <div style="background: var(--bg-overlay-l1); border-radius: var(--radius-6); padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--text-default);">
-                我分析了第三章的情节走向，林远在破晓前的内心独白可以更细腻。建议增加一段关于他回忆母亲教导的场景，来强化"传承"这个主题。需要我帮你写这段吗？
+                你好！我是你的 AI 创作助手。我可以帮你：<br><br>
+                • <b>续写内容</b> - 根据已有内容自然续写<br>
+                • <b>润色文字</b> - 优化表达，提升文学性<br>
+                • <b>生成对话</b> - 创作符合人物性格的对话<br>
+                • <b>自动写作</b> - 按大纲或设定批量生成<br>
+                • <b>问题诊断</b> - 分析卡文原因并给出方案<br>
+                • <b>智能排版</b> - 格式化和导出平台格式<br><br>
+                点击上方快捷按钮或直接告诉我你想做什么 👇
               </div>
-            </div>
-
-            <!-- User Message -->
-            <div class="flex justify-end" style="max-width: 100%;">
-              <div style="background: var(--bg-brand); border-radius: var(--radius-6); padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--text-onbrand); max-width: 85%;">
-                好的，写一段他回忆母亲在星空下教他认星座的场景，约200字
-              </div>
-            </div>
-
-            <!-- AI Message 2 -->
-            <div class="flex gap-2" style="max-width: 100%;">
-              <div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style="background: var(--bg-brand); margin-top: 2px;">
-                <img src="../assets/icons/dl-builtin-trae/sparkles.32f08c.svg" width="12" height="12" alt="">
-              </div>
-              <div style="background: var(--bg-overlay-l1); border-radius: var(--radius-6); padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--text-default);">
-                已为你写好回忆段落，插入在第三段之后。加入了北斗七星和"指极星"的意象，与后文林远导航的情节形成呼应。
-              </div>
-            </div>
-
-            <!-- System Note -->
-            <div class="flex items-center gap-1.5 px-2" style="font-size: 11px; color: var(--text-tertiary);">
-              <img src="../assets/icons/dl-builtin-trae/check-circle.33c192.svg" width="12" height="12" alt="" style="color: var(--icon-brand);">
-              <span>已插入 218 字</span>
             </div>
           </div>
 
-          <!-- Quick Action Chips -->
-          <div class="flex items-center gap-2 px-4 flex-shrink-0 flex-wrap" style="padding-top: 8px; padding-bottom: 8px; border-top: 1px solid var(--border-neutral-l1);">
-            <button class="flex items-center justify-center rounded-md cursor-pointer whitespace-nowrap" style="height: 28px; padding: 0 10px; background: transparent; border: 1px solid var(--border-neutral-l2); color: var(--text-secondary); font-size: 12px;">续写下一段</button>
-            <button class="flex items-center justify-center rounded-md cursor-pointer whitespace-nowrap" style="height: 28px; padding: 0 10px; background: transparent; border: 1px solid var(--border-neutral-l2); color: var(--text-secondary); font-size: 12px;">润色全文</button>
-            <button class="flex items-center justify-center rounded-md cursor-pointer whitespace-nowrap" style="height: 28px; padding: 0 10px; background: transparent; border: 1px solid var(--border-neutral-l2); color: var(--text-secondary); font-size: 12px;">生成对话</button>
-            <button class="flex items-center justify-center rounded-md cursor-pointer whitespace-nowrap" style="height: 28px; padding: 0 10px; background: transparent; border: 1px solid var(--border-neutral-l2); color: var(--text-secondary); font-size: 12px;">检查一致性</button>
-          </div>
-
-          <!-- AI Input Composer -->
-          <div class="flex-shrink-0 p-3">
+          <!-- ========== 第三层：输入框 ========== -->
+          <div class="flex-shrink-0 p-3" style="border-top: 1px solid var(--border-neutral-l1);">
+            <!-- 状态栏 -->
+            <div id="ai-status-bar" class="flex items-center justify-between mb-2" style="height: 20px;">
+              <span id="ai-status-text" style="font-size: 11px; color: var(--text-tertiary);">就绪</span>
+              <button id="stop-generate-btn" class="hidden flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background: var(--bg-overlay-l2); border: none; color: var(--text-secondary); font-size: 11px;">
+                <img src="../assets/icons/dl-builtin-trae/square.svg" width="10" height="10" alt="" class="opacity-60">
+                停止
+              </button>
+            </div>
+            <!-- 输入框 -->
             <div class="ds-composer" style="max-width: 100%; border-radius: var(--radius-8);">
-              <textarea class="ds-composer__input" placeholder="描述你想要的情节发展..." style="min-height: 48px;"></textarea>
+              <textarea id="ai-input-textarea" class="ds-composer__input" placeholder="描述你想要的情节发展，或直接说"续写"、"润色"..." style="min-height: 48px;"></textarea>
               <div class="ds-composer__toolbar">
                 <div class="ds-composer__tools">
-                  <button class="ds-composer__icon-btn" type="button" title="附件">
-                    <img src="../assets/icons/dl-builtin-trae/upload.svg" width="18" height="18" alt="" style="color: var(--icon-secondary);">
+                  <button class="ds-composer__icon-btn" type="button" title="插入选中内容">
+                    <img src="../assets/icons/dl-builtin-trae/file-text.svg" width="18" height="18" alt="" style="color: var(--icon-secondary);">
                   </button>
-                  <button class="ds-composer__icon-btn" type="button" title="语音输入">
+                  <button id="voice-input-btn" class="ds-composer__icon-btn" type="button" title="语音输入">
                     <img src="../assets/icons/dl-builtin-trae/mic.svg" width="18" height="18" alt="" style="color: var(--icon-secondary);">
                   </button>
                 </div>
                 <div class="ds-composer__actions">
-                  <button class="ds-composer__send" type="button" style="border-radius: var(--radius-6);">
+                  <button id="ai-send-btn" class="ds-composer__send" type="button" style="border-radius: var(--radius-6);">
                     <img src="../assets/icons/dl-builtin-trae/send.0c0c0d.svg" width="18" height="18" alt="send" class="icon">
                   </button>
                 </div>
