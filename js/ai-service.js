@@ -140,111 +140,69 @@
 
   // ========== 内置模型预设配置 ==========
   var BUILTIN_MODELS = {
-    'DeepSeek-V3': {
+    'DeepSeek': {
       provider: 'openai',
       model: 'deepseek-chat',
       apiUrl: 'https://api.deepseek.com/chat/completions',
       description: '深度求索，代码和推理能力强'
     },
-    'DeepSeek-R1': {
+    '通义千问': {
       provider: 'openai',
-      model: 'deepseek-reasoner',
-      apiUrl: 'https://api.deepseek.com/chat/completions',
-      description: '深度求索推理模型，擅长复杂问题'
-    },
-    '通义千问-max': {
-      provider: 'openai',
-      model: 'qwen-max-latest',
+      model: 'qwen-max',
       apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
       description: '阿里通义千问，中文能力强'
     },
-    '通义千问-plus': {
-      provider: 'openai',
-      model: 'qwen-plus-latest',
-      apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-      description: '阿里通义千问，性价比高'
-    },
-    '通义千问-turbo': {
-      provider: 'openai',
-      model: 'qwen-turbo-latest',
-      apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-      description: '阿里通义千问，速度快'
-    },
-    '豆包-pro': {
+    '豆包': {
       provider: 'openai',
       model: 'doubao-pro-32k',
       apiUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
       description: '字节跳动豆包，创作能力强'
     },
-    '豆包-lite': {
+    'Kimi': {
       provider: 'openai',
-      model: 'doubao-lite-32k',
-      apiUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
-      description: '字节跳动豆包，轻量快速'
-    },
-    'Kimi-k2': {
-      provider: 'openai',
-      model: 'kimi-k2',
+      model: 'moonshot-v1-8k',
       apiUrl: 'https://api.moonshot.cn/v1/chat/completions',
       description: '月之暗面Kimi，长文本能力强'
     },
-    '智谱-glm-4': {
+    '智谱': {
       provider: 'openai',
       model: 'glm-4',
       apiUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
       description: '智谱AI，通用大模型'
     },
-    '智谱-glm-4-flash': {
+    '文心一言': {
       provider: 'openai',
-      model: 'glm-4-flash',
-      apiUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-      description: '智谱AI，免费/低成本'
-    },
-    '文心一言-4': {
-      provider: 'openai',
-      model: 'ernie-4.0-turbo-8k',
-      apiUrl: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/chat/completions',
+      model: 'ernie-4.0-8k',
+      apiUrl: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions',
       description: '百度文心一言，中文理解强'
     },
-    'Claude-Sonnet-4': {
+    'Claude': {
       provider: 'anthropic',
       model: 'claude-sonnet-4-20250514',
       apiUrl: 'https://api.anthropic.com/v1/messages',
       description: 'Anthropic Claude，写作质量高'
     },
-    'Claude-Opus-4': {
-      provider: 'anthropic',
-      model: 'claude-opus-4-20250514',
-      apiUrl: 'https://api.anthropic.com/v1/messages',
-      description: 'Anthropic Claude，最强模型'
-    },
-    'GPT-4o': {
+    'GPT': {
       provider: 'openai',
       model: 'gpt-4o',
       apiUrl: 'https://api.openai.com/v1/chat/completions',
-      description: 'OpenAI GPT-4o，综合能力强'
+      description: 'OpenAI GPT，综合能力强'
     },
-    'GPT-4o-mini': {
-      provider: 'openai',
-      model: 'gpt-4o-mini',
-      apiUrl: 'https://api.openai.com/v1/chat/completions',
-      description: 'OpenAI GPT-4o mini，性价比高'
-    },
-    '零一万物-yi-large': {
+    '零一万物': {
       provider: 'openai',
       model: 'yi-large',
       apiUrl: 'https://api.lingyiwanwu.com/v1/chat/completions',
       description: '零一万物，中文创作优秀'
     },
-    'MiniMax-abab': {
+    'MiniMax': {
       provider: 'openai',
       model: 'abab6.5s-chat',
       apiUrl: 'https://api.minimax.chat/v1/text/chatcompletion_v2',
       description: 'MiniMax，创作类场景'
     },
-    'Step-2': {
+    '阶跃星辰': {
       provider: 'openai',
-      model: 'step-2',
+      model: 'step-2-16k',
       apiUrl: 'https://api.stepfun.com/v1/chat/completions',
       description: '阶跃星辰，多模态能力'
     }
