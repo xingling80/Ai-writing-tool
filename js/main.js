@@ -2989,6 +2989,33 @@
       addApiTrigger.addEventListener('click', function(e) {
         e.stopPropagation();
         apiPanel.classList.toggle('hidden');
+        populatePresetSelect();
+      });
+    }
+
+    function populatePresetSelect() {
+      var presetSelect = document.getElementById('preset-select');
+      if (!presetSelect || !window.AIService || !window.AIService.BUILTIN_MODELS) return;
+      if (presetSelect.options.length > 1) return;
+
+      var models = window.AIService.BUILTIN_MODELS;
+      Object.keys(models).forEach(function(name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        presetSelect.appendChild(opt);
+      });
+
+      presetSelect.addEventListener('change', function() {
+        var selected = presetSelect.value;
+        if (!selected || !models[selected]) return;
+        var model = models[selected];
+        var inputs = apiPanel.querySelectorAll('input');
+        if (inputs[0]) inputs[0].value = selected;
+        if (inputs[1]) inputs[1].value = model.apiUrl;
+        if (inputs[2] && !inputs[2].value) {
+          inputs[2].focus();
+        }
       });
     }
 
@@ -3017,6 +3044,13 @@
         if (apiUrlVal.indexOf('anthropic.com') !== -1) {
           provider = 'anthropic';
         }
+        var presetSelect = document.getElementById('preset-select');
+        if (presetSelect && presetSelect.value && window.AIService && window.AIService.BUILTIN_MODELS) {
+          var preset = window.AIService.BUILTIN_MODELS[presetSelect.value];
+          if (preset && preset.provider) {
+            provider = preset.provider;
+          }
+        }
 
         var config = {
           provider: provider,
@@ -3030,8 +3064,10 @@
         showNotification('已添加模型: ' + modelNameVal, 'info');
 
         inputs.forEach(function(inp) { inp.value = ''; });
+        if (presetSelect) presetSelect.value = '';
         apiPanel.classList.add('hidden');
         updateModelStatus();
+        renderModelOptions();
       });
     }
 

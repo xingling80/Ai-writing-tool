@@ -203,6 +203,22 @@
           </div>
           <div class="flex flex-col gap-3">
             <div class="flex flex-col gap-1">
+              <label style="font-size: 12px; color: var(--text-tertiary);">快速选择预设</label>
+              <select
+                id="preset-select"
+                class="rounded-md px-2.5 py-1.5 border-none outline-none cursor-pointer"
+                style="
+                  height: 32px;
+                  background: var(--bg-base-secondary);
+                  color: var(--text-default);
+                  font-size: 13px;
+                  border: 1px solid var(--border-neutral-l2);
+                "
+              >
+                <option value="">-- 选择一个 AI 服务商 --</option>
+              </select>
+            </div>
+            <div class="flex flex-col gap-1">
               <label style="font-size: 12px; color: var(--text-tertiary);">模型名称</label>
               <input
                 type="text"
