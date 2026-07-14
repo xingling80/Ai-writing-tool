@@ -252,9 +252,30 @@
 
   function migrateOldApiKeys() {
     var keys = {};
+    
+    // 从旧版 ai_writing_models_config 中迁移 apiKey
+    try {
+      var oldConfig = localStorage.getItem(STORAGE_KEY);
+      if (oldConfig) {
+        var config = JSON.parse(oldConfig);
+        Object.keys(config).forEach(function(modelName) {
+          var modelConfig = config[modelName];
+          if (modelConfig && modelConfig.apiKey && modelConfig.apiKey.length > 0) {
+            keys[modelName] = modelConfig.apiKey;
+            // 清除旧配置中的apiKey，保留其他信息
+            delete modelConfig.apiKey;
+          }
+        });
+        // 保存清除apiKey后的配置
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      }
+    } catch (e) {
+      console.warn('从旧配置迁移密钥失败:', e);
+    }
+    
+    // 也检查其他可能的旧键名
     var oldKeys = [
       { oldKey: 'AI_API_KEY', modelName: 'OpenAI' },
-      { oldKey: 'AI_API_BASE_URL', modelName: 'OpenAI' },
       { oldKey: 'claude_api_key', modelName: 'Claude' },
       { oldKey: 'deepseek_api_key', modelName: 'DeepSeek' },
       { oldKey: 'custom_api_key', modelName: 'Custom' },
@@ -265,7 +286,7 @@
     oldKeys.forEach(function(item) {
       try {
         var oldValue = localStorage.getItem(item.oldKey);
-        if (oldValue && oldValue.length > 0) {
+        if (oldValue && oldValue.length > 0 && !keys[item.modelName]) {
           keys[item.modelName] = oldValue;
           localStorage.removeItem(item.oldKey);
         }
@@ -276,6 +297,7 @@
     
     if (Object.keys(keys).length > 0) {
       localStorage.setItem(ENCRYPTED_KEYS_KEY, JSON.stringify(keys));
+      console.log('已迁移 ' + Object.keys(keys).length + ' 个API密钥');
     }
     
     return keys;
