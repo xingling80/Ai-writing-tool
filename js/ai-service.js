@@ -246,7 +246,39 @@
     } catch (e) {
       console.warn('加载密钥配置失败:', e);
     }
-    return {};
+    
+    return migrateOldApiKeys();
+  }
+
+  function migrateOldApiKeys() {
+    var keys = {};
+    var oldKeys = [
+      { oldKey: 'AI_API_KEY', modelName: 'OpenAI' },
+      { oldKey: 'AI_API_BASE_URL', modelName: 'OpenAI' },
+      { oldKey: 'claude_api_key', modelName: 'Claude' },
+      { oldKey: 'deepseek_api_key', modelName: 'DeepSeek' },
+      { oldKey: 'custom_api_key', modelName: 'Custom' },
+      { oldKey: 'ai_api_key', modelName: 'OpenAI' },
+      { oldKey: 'openai_api_key', modelName: 'OpenAI' }
+    ];
+    
+    oldKeys.forEach(function(item) {
+      try {
+        var oldValue = localStorage.getItem(item.oldKey);
+        if (oldValue && oldValue.length > 0) {
+          keys[item.modelName] = oldValue;
+          localStorage.removeItem(item.oldKey);
+        }
+      } catch (e) {
+        console.warn('迁移旧密钥失败:', e);
+      }
+    });
+    
+    if (Object.keys(keys).length > 0) {
+      localStorage.setItem(ENCRYPTED_KEYS_KEY, JSON.stringify(keys));
+    }
+    
+    return keys;
   }
 
   function isModelConfigured(modelName) {
