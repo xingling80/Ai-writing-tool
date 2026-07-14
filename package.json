@@ -1,12 +1,12 @@
 {
   "name": "ai-writing-tool",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "AI Writing Tool",
   "main": "main-electron.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win",
-    "release": "electron-builder --win --publish always"
+    "build": "set ELECTRON_CACHE=.electron-cache&& electron-builder --win",
+    "release": "set ELECTRON_CACHE=.electron-cache&& electron-builder --win --publish always"
   },
   "build": {
     "appId": "com.aiwriting.tool",

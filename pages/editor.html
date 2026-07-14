@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.deepseek.com https://dashscope.aliyuncs.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.openai.com https://api.moonshot.cn https://api.lingyiwanwu.com https://open.bigmodel.cn;">
     <title>章节编辑器</title>
     <link rel="stylesheet" href="../css/theme.css">
     <link rel="stylesheet" href="../css/components.css">
@@ -194,18 +195,43 @@
             padding: var(--spacer-16);
             box-shadow: 0 8px 32px rgba(0,0,0,0.4);
             z-index: 101;
-            width: 260px;
+            width: 280px;
           "
         >
           <div class="flex items-center justify-between mb-3">
-            <span style="font-size: 14px; color: var(--text-default); font-weight: 500;">添加 API</span>
+            <span style="font-size: 14px; color: var(--text-default); font-weight: 500;">配置 API</span>
             <img id="close-api-panel" src="../assets/icons/dl-builtin-trae/x.svg" width="16" height="16" alt="" class="cursor-pointer opacity-50">
           </div>
           <div class="flex flex-col gap-3">
             <div class="flex flex-col gap-1">
+              <label style="font-size: 12px; color: var(--text-tertiary);">选择服务商</label>
+              <select
+                id="preset-model-select"
+                class="rounded-md px-2.5 py-1.5 border-none outline-none"
+                style="
+                  height: 32px;
+                  background: var(--bg-base-secondary);
+                  color: var(--text-default);
+                  font-size: 13px;
+                  border: 1px solid var(--border-neutral-l2);
+                "
+              >
+                <option value="DeepSeek">DeepSeek</option>
+                <option value="Qwen">通义千问 (Qwen)</option>
+                <option value="Claude">Anthropic Claude</option>
+                <option value="Gemini">Google Gemini</option>
+                <option value="GPT">OpenAI GPT</option>
+                <option value="Moonshot">月之暗面 (Moonshot)</option>
+                <option value="Yi">零一万物 (Yi)</option>
+                <option value="Zhipu">智谱AI (Zhipu)</option>
+                <option value="custom">自定义</option>
+              </select>
+            </div>
+            <div class="flex flex-col gap-1" id="custom-model-name-field">
               <label style="font-size: 12px; color: var(--text-tertiary);">模型名称</label>
               <input
                 type="text"
+                id="custom-model-name-input"
                 placeholder="例如: My GPT-4"
                 class="rounded-md px-2.5 py-1.5 border-none outline-none"
                 style="
@@ -217,11 +243,12 @@
                 "
               >
             </div>
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1" id="api-url-field">
               <label style="font-size: 12px; color: var(--text-tertiary);">API 地址</label>
               <input
                 type="text"
-                placeholder="https://api.example.com/v1"
+                id="api-url-input"
+                placeholder="https://api.example.com/v1/chat/completions"
                 class="rounded-md px-2.5 py-1.5 border-none outline-none"
                 style="
                   height: 32px;
@@ -236,6 +263,7 @@
               <label style="font-size: 12px; color: var(--text-tertiary);">API Key</label>
               <input
                 type="password"
+                id="api-key-input"
                 placeholder="sk-..."
                 class="rounded-md px-2.5 py-1.5 border-none outline-none"
                 style="
@@ -248,6 +276,7 @@
               >
             </div>
             <button
+              id="confirm-add-api-btn"
               class="flex items-center justify-center gap-1.5 w-full rounded-md cursor-pointer mt-1"
               style="
                 height: 32px;
@@ -258,7 +287,7 @@
               "
             >
               <img src="../assets/icons/dl-builtin-trae/check-circle.33c192.svg" width="14" height="14" alt="">
-              <span>确认添加</span>
+              <span>确认配置</span>
             </button>
           </div>
         </div>
@@ -444,32 +473,30 @@
         <!-- ========== CENTER: Writing Editor (flex-1) ========== -->
         <section class="flex flex-col flex-1 min-w-0 min-h-0">
           <!-- Editor Tabs -->
-          <div class="ds-editortabs flex-shrink-0" id="editor-tabs-container">
-            <span class="ds-editortabs__spacer"></span>
-          </div>
+          <div class="ds-editortabs flex-shrink-0" id="editor-tabs-container"></div>
 
           <!-- Formatting Toolbar -->
           <div class="flex items-center gap-1 px-4 flex-shrink-0" style="height: 36px; border-bottom: 1px solid var(--border-neutral-l1);">
-            <button class="flex items-center justify-center rounded cursor-pointer" style="width: 28px; height: 28px; background: transparent; border: none; color: var(--icon-secondary);" title="粗体">
-              <img src="../assets/icons/dl-builtin-trae/type.svg" width="16" height="16" alt="" class="opacity-60">
+            <button class="editor-toolbar-btn" title="粗体">
+              <img src="../assets/icons/dl-builtin-trae/type.svg" width="16" height="16" alt="">
             </button>
-            <button class="flex items-center justify-center rounded cursor-pointer" style="width: 28px; height: 28px; background: transparent; border: none; color: var(--icon-secondary);" title="斜体">
-              <img src="../assets/icons/dl-builtin-trae/edit.svg" width="16" height="16" alt="" class="opacity-60">
+            <button class="editor-toolbar-btn" title="斜体">
+              <img src="../assets/icons/dl-builtin-trae/edit.svg" width="16" height="16" alt="">
             </button>
-            <button class="flex items-center justify-center rounded cursor-pointer" style="width: 28px; height: 28px; background: transparent; border: none; color: var(--icon-secondary);" title="下划线">
-              <img src="../assets/icons/dl-builtin-trae/underline.svg" width="16" height="16" alt="" class="opacity-60">
+            <button class="editor-toolbar-btn" title="下划线">
+              <img src="../assets/icons/dl-builtin-trae/underline.svg" width="16" height="16" alt="">
             </button>
-            <button class="flex items-center justify-center rounded cursor-pointer" style="width: 28px; height: 28px; background: transparent; border: none; color: var(--icon-secondary);" title="删除线">
-              <img src="../assets/icons/dl-builtin-trae/strikethrough.svg" width="16" height="16" alt="" class="opacity-60">
+            <button class="editor-toolbar-btn" title="删除线">
+              <img src="../assets/icons/dl-builtin-trae/strikethrough.svg" width="16" height="16" alt="">
             </button>
-            <button class="flex items-center justify-center rounded cursor-pointer" style="width: 28px; height: 28px; background: transparent; border: none; color: var(--icon-secondary);" title="标题">
-              <img src="../assets/icons/dl-builtin-trae/hash.svg" width="16" height="16" alt="" class="opacity-60">
+            <button class="editor-toolbar-btn" title="标题">
+              <img src="../assets/icons/dl-builtin-trae/hash.svg" width="16" height="16" alt="">
             </button>
-            <button class="flex items-center justify-center rounded cursor-pointer" style="width: 28px; height: 28px; background: transparent; border: none; color: var(--icon-secondary);" title="列表">
-              <img src="../assets/icons/dl-builtin-trae/list.svg" width="16" height="16" alt="" class="opacity-60">
+            <button class="editor-toolbar-btn" title="列表">
+              <img src="../assets/icons/dl-builtin-trae/list.svg" width="16" height="16" alt="">
             </button>
-            <button class="flex items-center justify-center rounded cursor-pointer" style="width: 28px; height: 28px; background: transparent; border: none; color: var(--icon-secondary);" title="链接">
-              <img src="../assets/icons/dl-builtin-trae/link.svg" width="16" height="16" alt="" class="opacity-60">
+            <button class="editor-toolbar-btn" title="链接">
+              <img src="../assets/icons/dl-builtin-trae/link.svg" width="16" height="16" alt="">
             </button>
           </div>
 
@@ -600,7 +627,11 @@
   </div>
 </div>
 
-<script src="../js/works-store.js"></script>
-<script src="../js/materials-store.js"></script>
-<script src="../js/ai-service.js"></script>
-<script src="../js/main.js?v=2"></script>
+<script src="../js/utils.js?v=9"></script>
+<script src="../js/works-store.js?v=9"></script>
+<script src="../js/materials-store.js?v=9"></script>
+<script src="../js/ai-service.js?v=9"></script>
+<script src="../js/editor.js?v=9"></script>
+<script src="../js/composer.js?v=9"></script>
+<script src="../js/memory-panel.js?v=9"></script>
+<script src="../js/main.js?v=9"></script>

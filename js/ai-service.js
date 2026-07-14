@@ -87,21 +87,39 @@
     var memory = loadMemory();
     var parts = [];
 
-    // 第一层：世界观设定
+    // 第一层：作品基本信息
+    if (context) {
+      var basicInfo = [];
+      if (context.workName) basicInfo.push('作品名：' + context.workName);
+      if (context.chapter) basicInfo.push('当前章节：' + context.chapter);
+      if (context.genre) basicInfo.push('题材/类型：' + context.genre);
+      if (context.style) basicInfo.push('文风：' + context.style);
+      if (context.description) basicInfo.push('作品简介：' + context.description);
+      if (basicInfo.length > 0) {
+        parts.push('【作品基本信息】\n' + basicInfo.join('\n'));
+      }
+
+      // 章节大纲
+      if (context.outline && context.outline.length > 0) {
+        parts.push('【章节大纲】\n' + context.outline.map(function(item, i) { return (i + 1) + '. ' + item; }).join('\n'));
+      }
+    }
+
+    // 第二层：世界观设定
     if (memory.worldSettings) {
       parts.push('【世界观设定】\n' + memory.worldSettings);
     }
 
-    // 第二层：全局摘要（长篇记忆，防止AI"忘事"）
+    // 第三层：全局摘要（长篇记忆，防止AI"忘事"）
     if (memory.globalSummary) {
       parts.push('【故事全局摘要】\n' + memory.globalSummary);
     }
 
-    // 第三层：角色设定簿（防止角色"精分"）
+    // 第四层：角色设定簿（防止角色"精分"）
     if (memory.characters && memory.characters.length > 0) {
       var charBlock = '【角色设定簿】\n';
       memory.characters.forEach(function(c) {
-        if (c.resolved) return; // 跳过已退出角色
+        if (c.resolved) return;
         charBlock += '■ ' + c.name;
         if (c.alias) charBlock += '（' + c.alias + '）';
         charBlock += '\n';
@@ -117,7 +135,7 @@
       parts.push(charBlock);
     }
 
-    // 第四层：伏笔追踪（防止伏笔丢失）
+    // 第五层：伏笔追踪（防止伏笔丢失）
     var unresolved = memory.foreshadowing ? memory.foreshadowing.filter(function(f) { return !f.resolved; }) : [];
     if (unresolved.length > 0) {
       var fBlock = '【未解决的伏笔/悬念】\n';
@@ -129,7 +147,7 @@
       parts.push(fBlock);
     }
 
-    // 第五层：文风备注
+    // 第六层：文风备注
     if (memory.styleNotes) {
       parts.push('【文风要求】\n' + memory.styleNotes);
     }
@@ -184,6 +202,7 @@
 
   // ========== 存储管理 ==========
   var STORAGE_KEY = 'ai_writing_models_config';
+  var ENCRYPTED_KEYS_KEY = 'ai_writing_encrypted_keys';
 
   function loadConfig() {
     try {
@@ -202,6 +221,49 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     } catch (e) {
       console.warn('保存配置失败:', e);
+    }
+  }
+
+  function saveApiKeyEncrypted(modelName, apiKey) {
+    if (window.secureStorage) {
+      return window.secureStorage.encryptAndSaveKey(ENCRYPTED_KEYS_KEY + '_' + modelName, apiKey);
+    } else {
+      try {
+        var keys = loadEncryptedKeys();
+        keys[modelName] = apiKey;
+        localStorage.setItem(ENCRYPTED_KEYS_KEY, JSON.stringify(keys));
+        return Promise.resolve({ success: true });
+      } catch (e) {
+        return Promise.resolve({ success: false, error: e.message });
+      }
+    }
+  }
+
+  function loadEncryptedKeys() {
+    try {
+      var saved = localStorage.getItem(ENCRYPTED_KEYS_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('加载密钥配置失败:', e);
+    }
+    return {};
+  }
+
+  function isModelConfigured(modelName) {
+    var keys = loadEncryptedKeys();
+    return keys[modelName] && keys[modelName].length > 0;
+  }
+
+  function getApiKeyEncrypted(modelName) {
+    if (window.secureStorage) {
+      return window.secureStorage.decryptKey(ENCRYPTED_KEYS_KEY + '_' + modelName);
+    } else {
+      try {
+        var keys = loadEncryptedKeys();
+        return Promise.resolve({ success: true, value: keys[modelName] || '' });
+      } catch (e) {
+        return Promise.resolve({ success: false, error: e.message, value: '' });
+      }
     }
   }
 
@@ -232,6 +294,9 @@
     var saved = loadConfig();
     delete saved[modelName];
     saveConfig(saved);
+    var keys = loadEncryptedKeys();
+    delete keys[modelName];
+    localStorage.setItem(ENCRYPTED_KEYS_KEY, JSON.stringify(keys));
   }
 
   // ========== 当前模型管理 ==========
@@ -240,14 +305,13 @@
   function getCurrentModel() {
     var saved = localStorage.getItem(CURRENT_MODEL_KEY);
     if (saved) {
-      var config = getModelsConfig();
-      if (config[saved]) {
+      if (isModelConfigured(saved)) {
         return saved;
       }
     }
-    var config = getModelsConfig();
-    var keys = Object.keys(config);
-    return keys.length > 0 ? keys[0] : '';
+    var keys = loadEncryptedKeys();
+    var configuredModels = Object.keys(keys).filter(function(k) { return keys[k] && keys[k].length > 0; });
+    return configuredModels.length > 0 ? configuredModels[0] : '';
   }
 
   function setCurrentModel(modelName) {
@@ -442,59 +506,92 @@
    * @param {Array} messages - 消息数组 [{role, content}]
    * @param {Object} options - 选项 {stream, temperature, max_tokens, onChunk, onDone, onError, model}
    */
-function chat(messages, options) {
+  function chat(messages, options) {
     options = options || {};
     var modelName = options.model || getCurrentModel();
     var config = getModelConfig(modelName);
 
     if (!config) {
-      if (options.onError) options.onError(new Error('未找到模型配置: ' + modelName + '，请点击左下角模型名称配置 API。'));
-      return;
-    }
-
-    if (!config.apiKey) {
-      if (options.onError) options.onError(new Error('请先配置 ' + modelName + ' 的 API Key。点击左下角模型名称，选择"添加自定义 API"来设置。'));
+      if (options.onError) options.onError(new Error('未找到模型配置，请点击左下角模型名称配置 API。'));
       return;
     }
 
     var onChunk = options.onChunk || function () {};
     var onDone = options.onDone || function () {};
     var onError = options.onError || function (err) {
-      console.error('AI 调用失败:', err);
+      console.error('AI 调用失败:', maskError(err));
     };
 
-    if (config.provider === 'anthropic') {
-      callAnthropic(config, messages, options, onChunk, onDone, onError);
-    } else {
-      callOpenAI(config, messages, options, onChunk, onDone, onError);
+    getApiKeyEncrypted(modelName).then(function(result) {
+      if (!result.success) {
+        if (options.onError) options.onError(new Error('密钥读取失败'));
+        return;
+      }
+      
+      var apiKey = result.value || config.apiKey;
+      if (!apiKey) {
+        if (options.onError) options.onError(new Error('请先配置 API Key。点击左下角模型名称进行设置。'));
+        return;
+      }
+
+      config.apiKey = apiKey;
+
+      if (config.provider === 'anthropic') {
+        callAnthropic(config, messages, options, onChunk, onDone, onError);
+      } else {
+        callOpenAI(config, messages, options, onChunk, onDone, onError);
+      }
+    }).catch(function(err) {
+      console.error('获取密钥异常:', err);
+      if (options.onError) options.onError(new Error('密钥读取异常'));
+    });
+  }
+
+  function maskError(err) {
+    if (!err || !err.message) return err;
+    var masked = err.message;
+    if (window.Utils && window.Utils.maskSecret) {
+      masked = masked.replace(/sk-[a-zA-Z0-9]+/g, function(match) {
+        return window.Utils.maskSecret(match);
+      });
     }
+    return Object.assign(err, { message: masked });
   }
 
   // ========== 写作场景预设 Prompt ==========
 
   var PROMPTS = {
     // 续写下一段
-    continueWriting: function (context, currentText) {
+    continueWriting: function (context, currentText, mode) {
       var memoryContext = buildContextBlock(context);
       var contextInfo = '作品名：' + (context.workName || '未命名') + '\n当前章节：' + (context.chapter || '未命名');
       if (context.outline && context.outline.length > 0) {
         contextInfo += '\n章节大纲：\n' + context.outline.map(function(item, i) { return (i + 1) + '. ' + item; }).join('\n');
       }
 
+      var modeInstruction = '';
+      if (mode === 'plot') {
+        modeInstruction = '【当前模式：情节推进】\n请加快叙事节奏，重点推进主线剧情发展，引入新的事件或冲突，让故事有实质性进展。输出约500-700字。';
+      } else if (mode === 'emotion') {
+        modeInstruction = '【当前模式：情感递进】\n请侧重人物情感和心理描写，深入刻画人物内心世界的变化，通过细节展现情感的递进和转变。输出约400-600字。';
+      } else if (mode === 'suspense') {
+        modeInstruction = '【当前模式：悬念转折】\n请制造悬念或剧情反转，埋下新的伏笔，或让局势出现意想不到的变化，增加故事张力。输出约400-600字。';
+      } else {
+        modeInstruction = '【当前模式：自然续写】\n保持当前叙事节奏自然推进。输出约400-600字。';
+      }
+
       var systemContent = '你是一位专业的小说创作助手。请根据已有的章节内容，续写下一段。\n\n' +
+        modeInstruction + '\n\n' +
         '【核心规则（严格遵守）】\n' +
-        '1. 严格保持文风和叙事节奏一致\n' +
+        '1. 严格保持文风和叙事视角一致\n' +
         '2. 自然衔接现有内容，不要重复已有内容\n' +
         '3. 推动情节发展，引入新的张力或转折\n' +
-        '4. 【重要】只输出续写的正文内容，绝对不要加任何标题、章节名、"第X章"、小标题、说明文字、注释、Markdown标记\n' +
-        '5. 【重要】自动分段：场景转换、视角切换、对话开始/结束时，用空行分隔段落\n' +
-        '6. 【重要】人物对话必须单独成段，不要和叙述文字混在一个段落里\n' +
-        '7. 不要使用"似乎""仿佛""宛如"等过度修辞，用具体的动作和感官描写\n' +
-        '8. 注意角色说话风格必须符合设定簿中的描述\n' +
-        '9. 如果有未解决的伏笔，优先考虑推进相关情节\n' +
-        '10. 输出约400-600字，分3-5个自然段落\n' +
-        '11. 每段以叙述或动作描写开头和结尾，避免以对话开头或结尾的段落过于突兀\n' +
-        '12. 多用"五感描写"（视觉、听觉、嗅觉、触觉、味觉）让场景更立体';
+        '4. 【重要】只输出续写的正文内容，绝对不要加任何标题、章节名、说明文字、注释\n' +
+        '5. 自动分段：场景转换、视角切换、对话开始/结束时，用空行分隔段落\n' +
+        '6. 人物对话必须单独成段\n' +
+        '7. 多用"五感描写"让场景更立体\n' +
+        '8. 注意角色说话风格必须符合设定\n' +
+        '9. 【防AI味】禁止总结式结尾，禁止"他知道""他想到"开头，禁止过度省略号，禁止直白陈述情感';
 
       if (memoryContext) {
         systemContent += '\n\n' + memoryContext;
@@ -510,21 +607,29 @@ function chat(messages, options) {
     },
 
     // 润色全文
-    polish: function (context, currentText) {
+    polish: function (context, currentText, mode) {
       var memoryContext = buildContextBlock(context);
+
+      var modeInstruction = '';
+      if (mode === 'deep') {
+        modeInstruction = '【当前模式：深度润色】\n全面提升文学性和表现力，对句子结构、用词、节奏进行深度优化，大幅提升文字质感，但保持原意和情节不变。';
+      } else if (mode === 'classical') {
+        modeInstruction = '【当前模式：古风化】\n将文字转为古风水墨风格，使用典雅的文言词汇和句式，营造古典韵味，但保持可读性和故事性。';
+      } else if (mode === 'colloquial') {
+        modeInstruction = '【当前模式：口语化】\n将文字转为更贴近日常对话的口语化风格，用词更自然随意，更接地气，但保持叙事流畅。';
+      } else {
+        modeInstruction = '【当前模式：轻度润色】\n优化表达，修正小问题，不改变原意和风格，只做轻微的文字优化。';
+      }
+
       var systemContent = '你是一位专业的文学编辑。请对以下文章进行润色。\n\n' +
+        modeInstruction + '\n\n' +
         '【润色规则（严格遵守）】\n' +
-        '1. 提升文字的文学性和表现力\n' +
-        '2. 优化句式结构和节奏，长短句交替，避免句式单调\n' +
-        '3. 修正语法和用词问题\n' +
-        '4. 保持原文的故事情节和人物性格绝对不变\n' +
-        '5. 【重要】只输出润色后的完整正文，不要加任何标题、说明、注释、Markdown标记\n' +
-        '6. 注意角色言行必须符合角色设定簿\n' +
-        '7. 不要改变剧情走向，只优化表达\n' +
-        '8. 【重要】保持原有的段落结构，原有的分段不要随意合并或拆分\n' +
-        '9. 增强感官描写：适当增加视觉、听觉、嗅觉、触觉的细节\n' +
-        '10. 对话要符合人物性格，避免千人一面\n' +
-        '11. 删掉冗余的修饰词，让文字更干净有力';
+        '1. 保持原文的故事情节和人物性格绝对不变\n' +
+        '2. 【重要】只输出润色后的完整正文，不要加任何标题、说明、注释\n' +
+        '3. 【重要】保持原有的段落结构，原有的分段不要随意合并或拆分\n' +
+        '4. 注意角色言行必须符合角色设定\n' +
+        '5. 不要改变剧情走向，只优化表达\n' +
+        '6. 对话要符合人物性格';
 
       if (memoryContext) {
         systemContent += '\n\n' + memoryContext;
@@ -600,6 +705,10 @@ function chat(messages, options) {
       if (context.outline && context.outline.length > 0) {
         contextInfo += '\n章节大纲：' + context.outline.join('、');
       }
+      if (context.genre) contextInfo += '\n作品类型：' + context.genre;
+      if (context.style) contextInfo += '\n写作风格：' + context.style;
+      if (context.description) contextInfo += '\n作品简介：' + context.description;
+      if (context.targetWordCount) contextInfo += '\n目标字数：约' + context.targetWordCount + '字';
       if (context.currentContent) {
         contextInfo += '\n\n当前章节已有内容（摘要）：\n' + context.currentContent;
       }
@@ -625,11 +734,19 @@ function chat(messages, options) {
 
       var messages = [{ role: 'system', content: systemContent }];
 
-      // 添加历史消息（保留上下文）
+      // 添加历史消息（使用ContextManager管理上下文窗口）
       if (history && history.length > 0) {
-        history.forEach(function (msg) {
-          messages.push({ role: msg.role, content: msg.content });
+        var historyMessages = history.map(function (msg) {
+          return { role: msg.role, content: msg.content };
         });
+        if (window.Utils && window.Utils.ContextManager) {
+          var compressedHistory = window.Utils.ContextManager.compressContext(historyMessages, 5000);
+          messages = messages.concat(compressedHistory);
+        } else {
+          history.forEach(function (msg) {
+            messages.push({ role: msg.role, content: msg.content });
+          });
+        }
       }
 
       messages.push({ role: 'user', content: userMessage });
@@ -637,18 +754,32 @@ function chat(messages, options) {
     },
 
     // 生成素材
-    generateMaterial: function (type, description) {
+    generateMaterial: function (context, type, description) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的创作素材生成助手。请根据用户当前作品的设定和要求，生成符合作品风格的创作素材。素材类型包括：情节模板、人物设定、世界观、场景描写、对话风格。\n\n要求：\n1. 内容详细、有创意\n2. 必须符合当前作品的题材、风格和设定\n3. 与已有角色和世界观保持一致\n4. 只输出素材内容，不要加额外说明';
+
+      if (memoryContext) {
+        systemContent += '\n\n' + memoryContext;
+      }
+
       return [
-        { role: 'system', content: '你是一位专业的创作素材生成助手。请根据用户的要求生成创作素材。素材类型包括：情节模板、人物设定、世界观、场景描写、对话风格。\n\n要求：\n1. 内容详细、有创意\n2. 适合用于小说创作\n3. 只输出素材内容，不要加额外说明' },
-        { role: 'user', content: '素材类型：' + (type || '不限') + '\n要求描述：' + (description || '请随机生成一个有趣的创作素材') + '\n\n请生成素材：' }
+        { role: 'system', content: systemContent },
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n题材：' + (context.genre || '不限') + '\n文风：' + (context.style || '默认') + '\n\n素材类型：' + (type || '不限') + '\n要求描述：' + (description || '请生成一个有趣的创作素材') + '\n\n请生成素材：' }
       ];
     },
 
     // AI 展开素材
-    expandMaterial: function (materialTitle, materialContent) {
+    expandMaterial: function (context, materialTitle, materialContent) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的创作素材展开助手。请将以下素材内容展开为更详细的描述，确保展开后的内容符合当前作品的设定和风格。\n\n展开要求：\n1. 更丰富的细节，使其更适合小说创作\n2. 具体的使用建议\n3. 可能的变体或发展方向\n4. 必须符合作品的题材、风格和已有设定\n5. 与已有角色和世界观保持一致\n\n只输出展开后的内容，不要加额外说明。';
+
+      if (memoryContext) {
+        systemContent += '\n\n' + memoryContext;
+      }
+
       return [
-        { role: 'system', content: '你是一位专业的创作素材展开助手。请将以下素材内容展开为更详细的描述，包括：\n1. 更丰富的细节\n2. 具体的使用建议\n3. 可能的变体或发展方向\n\n只输出展开后的内容，不要加额外说明。' },
-        { role: 'user', content: '素材标题：' + materialTitle + '\n素材内容：' + materialContent + '\n\n请展开这个素材：' }
+        { role: 'system', content: systemContent },
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n题材：' + (context.genre || '不限') + '\n文风：' + (context.style || '默认') + '\n\n素材标题：' + materialTitle + '\n素材内容：' + materialContent + '\n\n请展开这个素材：' }
       ];
     },
 
@@ -674,7 +805,7 @@ function chat(messages, options) {
     },
 
     // 生成全局摘要（关键：让AI"记住"前面写了什么）
-    generateSummary: function (currentText) {
+    generateSummary: function (context, currentText) {
       var memory = loadMemory();
       var existingSummary = memory.globalSummary || '';
 
@@ -693,7 +824,7 @@ function chat(messages, options) {
 
       return [
         { role: 'system', content: systemContent },
-        { role: 'user', content: '请根据以下最新章节内容，更新全局摘要：\n\n' + currentText }
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n章节：' + (context.chapter || '未命名') + '\n\n请根据以下最新章节内容，更新全局摘要：\n\n' + currentText }
       ];
     },
 
@@ -819,7 +950,8 @@ function chat(messages, options) {
         '4. 【重要】自然分段，对话单独成段，每段150-250字左右\n' +
         '5. 写约400-600字后暂停，等待用户确认是否继续\n' +
         '6. 运用五感描写让场景更立体\n' +
-        '7. 对话要符合人物性格，有辨识度';
+        '7. 对话要符合人物性格，有辨识度\n' +
+        '8. 【防AI味】禁止总结式结尾，禁止"他知道""他想到"开头，禁止过度省略号，禁止直白陈述情感，禁止"却""竟""不由得"过度转折';
 
       if (memoryContext) {
         systemContent += '\n\n' + memoryContext;
@@ -865,7 +997,8 @@ function chat(messages, options) {
         '3. 【重要】只输出正文，绝对不要加标题、注释、Markdown标记\n' +
         '4. 【重要】自然分段，对话单独成段\n' +
         '5. 输出约300-500字\n' +
-        '6. 运用五感描写，场景要立体';
+        '6. 运用五感描写，场景要立体\n' +
+        '7. 【防AI味】禁止总结式结尾，禁止"他知道""他想到"开头，禁止过度省略号，禁止直白陈述情感，禁止"却""竟""不由得"过度转折';
 
       if (memoryContext) {
         systemContent += '\n\n' + memoryContext;
@@ -887,7 +1020,8 @@ function chat(messages, options) {
         '2. 【重要】只输出正文，绝对不要加标题、注释、Markdown标记\n' +
         '3. 【重要】自然分段，对话单独成段\n' +
         '4. 运用五感描写，场景要立体\n' +
-        '5. 对话要符合人物性格，有辨识度';
+        '5. 对话要符合人物性格，有辨识度\n' +
+        '6. 【防AI味】禁止总结式结尾，禁止"他知道""他想到"开头，禁止过度省略号，禁止直白陈述情感，禁止"却""竟""不由得"过度转折';
 
       if (memoryContext) {
         systemContent += '\n\n' + memoryContext;
@@ -958,35 +1092,51 @@ function chat(messages, options) {
     // ========== 智能排版系列 ==========
 
     // 对话格式优化
-    formatDialogue: function (text) {
+    formatDialogue: function (context, text) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的小说排版编辑。请优化对话的格式和标签，确保优化后的对话符合当前作品的风格和角色设定。\n\n' +
+        '【优化规则】\n' +
+        '1. 对话单独成段，用中文引号「""」包裹\n' +
+        '2. 将简单的"他说""她说"改为动作描写或神态描写\n' +
+        '3. 叙述性对话标签改为融入式描写\n' +
+        '4. 保持原文意思不变，只优化格式和表达\n' +
+        '5. 对话风格必须符合角色设定簿中的说话风格\n' +
+        '6. 只输出优化后的正文';
+
+      if (memoryContext) {
+        systemContent += '\n\n' + memoryContext;
+      }
+
       return [
-        { role: 'system', content: '你是一位专业的小说排版编辑。请优化对话的格式和标签。\n\n' +
-          '【优化规则】\n' +
-          '1. 对话单独成段，用中文引号「""」包裹\n' +
-          '2. 将简单的"他说""她说"改为动作描写或神态描写\n' +
-          '3. 叙述性对话标签改为融入式描写\n' +
-          '4. 保持原文意思不变，只优化格式和表达\n' +
-          '5. 只输出优化后的正文' },
-        { role: 'user', content: '请优化以下对话格式：\n\n' + text }
+        { role: 'system', content: systemContent },
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n章节：' + (context.chapter || '未命名') + '\n\n请优化以下对话格式：\n\n' + text }
       ];
     },
 
     // 时间线检查
-    checkTimeline: function (text) {
+    checkTimeline: function (context, text) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的小说编辑，负责检查时间线的一致性。\n\n' +
+        '【检查内容】\n' +
+        '1. 时间顺序是否合理（如早上吃午饭）\n' +
+        '2. 时间跨度是否矛盾\n' +
+        '3. 季节/天气是否一致\n' +
+        '4. 人物年龄/事件时间是否合理\n' +
+        '5. 与全局摘要中的时间线是否一致\n\n' +
+        '请列出发现的问题，如果没有问题请说明"时间线无明显问题"';
+
+      if (memoryContext) {
+        systemContent += '\n\n' + memoryContext;
+      }
+
       return [
-        { role: 'system', content: '你是一位专业的小说编辑，负责检查时间线的一致性。\n\n' +
-          '【检查内容】\n' +
-          '1. 时间顺序是否合理（如早上吃午饭）\n' +
-          '2. 时间跨度是否矛盾\n' +
-          '3. 季节/天气是否一致\n' +
-          '4. 人物年龄/事件时间是否合理\n\n' +
-          '请列出发现的问题，如果没有问题请说明"时间线无明显问题"' },
-        { role: 'user', content: '请检查以下内容的时间线：\n\n' + text }
+        { role: 'system', content: systemContent },
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n章节：' + (context.chapter || '未命名') + '\n\n请检查以下内容的时间线：\n\n' + text }
       ];
     },
 
     // 平台格式导出
-    exportForPlatform: function (text, platform) {
+    exportForPlatform: function (context, text, platform) {
       var platformRules = {
         '起点': '每段首行空两格，对话用中文引号，章节标题用"第一章"格式',
         '晋江': '每段首行空两格，对话用中文引号，注重情感描写',
@@ -995,12 +1145,18 @@ function chat(messages, options) {
         '通用': '标准小说格式，首行缩进，对话单独成段'
       };
       var rule = platformRules[platform] || platformRules['通用'];
+      var systemContent = '你是一位专业的小说排版编辑。请将内容转换为' + platform + '平台格式，同时保持作品的风格和角色设定不变。\n\n' +
+        '【' + platform + '格式要求】\n' +
+        rule + '\n\n' +
+        '【注意】\n' +
+        '1. 只优化格式，不改变剧情和人物性格\n' +
+        '2. 对话风格必须符合角色设定簿\n' +
+        '3. 保持原文意思不变\n' +
+        '4. 只输出格式化后的正文';
+
       return [
-        { role: 'system', content: '你是一位专业的小说排版编辑。请将内容转换为' + platform + '平台格式。\n\n' +
-          '【' + platform + '格式要求】\n' +
-          rule + '\n\n' +
-          '只输出格式化后的正文' },
-        { role: 'user', content: '请转换为' + platform + '格式：\n\n' + text }
+        { role: 'system', content: systemContent },
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n题材：' + (context.genre || '不限') + '\n\n请转换为' + platform + '格式：\n\n' + text }
       ];
     },
 
@@ -1028,7 +1184,7 @@ function chat(messages, options) {
     },
 
     // 自动提取角色信息（从已有文本中识别角色设定）
-    extractCharacters: function (currentText) {
+    extractCharacters: function (context, currentText) {
       var memory = loadMemory();
       var existingChars = memory.characters.map(function(c) { return c.name; }).join('、');
 
@@ -1037,7 +1193,8 @@ function chat(messages, options) {
         '1. 识别文本中出现的所有有名角色\n' +
         '2. 提取每个角色的：姓名、年龄（如有）、性格特征、说话风格、外貌描述、人际关系\n' +
         '3. 只提取文本中明确提及或可推断的信息，不要编造\n' +
-        '4. 按JSON数组格式输出，每个角色一个对象';
+        '4. 按JSON数组格式输出，每个角色一个对象\n' +
+        '5. 与已有角色设定合并时，优先以文本中的新信息为准';
 
       if (existingChars) {
         systemContent += '\n\n【已有角色（补充新信息，不重复）】\n' + existingChars;
@@ -1045,7 +1202,99 @@ function chat(messages, options) {
 
       return [
         { role: 'system', content: systemContent },
-        { role: 'user', content: '请从以下文本中提取角色信息：\n\n' + currentText.substring(0, 3000) + '\n\n请输出JSON数组，格式如：[{"name":"角色名","personality":"性格","speechStyle":"说话风格","relationships":"关系"}]' }
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n章节：' + (context.chapter || '未命名') + '\n\n请从以下文本中提取角色信息：\n\n' + currentText.substring(0, 3000) + '\n\n请输出JSON数组，格式如：[{"name":"角色名","personality":"性格","speechStyle":"说话风格","relationships":"关系"}]' }
+      ];
+    },
+
+    // 生成章节大纲
+    generateChapterOutline: function (context, chapterTheme) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的小说策划编辑，擅长设计章节大纲。\n\n' +
+        '【设计要求】\n' +
+        '1. 大纲要有清晰的起承转合结构\n' +
+        '2. 每个情节点都要有具体的场景和冲突\n' +
+        '3. 要考虑人物性格和动机的一致性\n' +
+        '4. 适当设置悬念和伏笔\n' +
+        '5. 输出3-5个主要情节点';
+
+      return [
+        { role: 'system', content: systemContent + memoryContext },
+        { role: 'user', content: '请为以下主题设计章节大纲：\n\n主题：' + (chapterTheme || '下一章') +
+          '\n\n请按以下格式输出：\n1. 【场景】情节描述 - 冲突/悬念\n2. ...' }
+      ];
+    },
+
+    // 剧情建议
+    plotSuggestions: function (context, currentText) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位经验丰富的小说创作顾问。\n\n' +
+        '【建议要求】\n' +
+        '1. 提供3个不同方向的剧情发展建议\n' +
+        '2. 每个建议都要有具体的转折点和冲突\n' +
+        '3. 考虑人物性格和已有伏笔\n' +
+        '4. 建议要有可行性和戏剧性\n' +
+        '5. 分别说明每个方向的优缺点';
+
+      return [
+        { role: 'system', content: systemContent + memoryContext },
+        { role: 'user', content: '【当前剧情】\n' + (currentText ? currentText.substring(0, 2000) : '（暂无内容）') +
+          '\n\n请给出3个不同的剧情发展建议，每个建议包括：方向名称、具体情节、优缺点分析。' }
+      ];
+    },
+
+    // 生成章节标题
+    generateChapterTitles: function (context, chapterContent) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的小说编辑，擅长构思吸引人的章节标题。\n\n' +
+        '【标题要求】\n' +
+        '1. 提供5个不同风格的标题选项\n' +
+        '2. 标题要符合章节内容，有吸引力\n' +
+        '3. 风格可以包括：悬念式、意境式、对话式、比喻式、直白式\n' +
+        '4. 每个标题不超过15个字';
+
+      return [
+        { role: 'system', content: systemContent + memoryContext },
+        { role: 'user', content: '【章节内容】\n' + (chapterContent ? chapterContent.substring(0, 2000) : '（暂无内容）') +
+          '\n\n请为这一章生成5个标题选项，编号列出。' }
+      ];
+    },
+
+    // 人物关系分析
+    analyzeRelationships: function (context, currentText) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的文学评论家，擅长分析人物关系。\n\n' +
+        '【分析要求】\n' +
+        '1. 梳理主要人物之间的关系网络\n' +
+        '2. 分析关系的性质和变化趋势\n' +
+        '3. 指出潜在的冲突和张力点\n' +
+        '4. 给出关系发展的建议';
+
+      return [
+        { role: 'system', content: systemContent + memoryContext },
+        { role: 'user', content: '【文本内容】\n' + (currentText ? currentText.substring(0, 3000) : '（暂无内容）') +
+          '\n\n请分析文中人物关系，包括：关系图谱、关键冲突、发展建议。' }
+      ];
+    },
+
+    // 提取伏笔
+    extractForeshadowing: function (context, currentText) {
+      var memoryContext = buildContextBlock(context);
+      var systemContent = '你是一位专业的小说编辑，负责从文本中识别和提取伏笔。\n\n' +
+        '【提取规则】\n' +
+        '1. 找出文本中所有可能是伏笔的内容\n' +
+        '2. 伏笔包括：悬念、未解之谜、人物秘密、预言、暗示、神秘事件等\n' +
+        '3. 只提取文本中明确出现的内容，不要编造\n' +
+        '4. 按JSON数组格式输出，每个伏笔一个对象\n' +
+        '5. 每个对象包含：description（伏笔描述）、hint（提示/可能的回收方式）\n' +
+        '6. 与已有伏笔合并，避免重复';
+
+      if (memoryContext) {
+        systemContent += '\n\n' + memoryContext;
+      }
+
+      return [
+        { role: 'system', content: systemContent },
+        { role: 'user', content: '作品名：' + (context.workName || '未命名') + '\n章节：' + (context.chapter || '未命名') + '\n\n请从以下文本中提取伏笔：\n\n' + currentText.substring(0, 3000) + '\n\n请输出JSON数组，格式如：[{"description":"伏笔描述","hint":"回收提示"}]' }
       ];
     }
   };
@@ -1057,8 +1306,11 @@ function chat(messages, options) {
     getModelConfig: getModelConfig,
     setModelConfig: setModelConfig,
     deleteModelConfig: deleteModelConfig,
+    isModelConfigured: isModelConfigured,
     getCurrentModel: getCurrentModel,
     setCurrentModel: setCurrentModel,
+    saveApiKeyEncrypted: saveApiKeyEncrypted,
+    getApiKeyEncrypted: getApiKeyEncrypted,
     PROMPTS: PROMPTS,
     BUILTIN_MODELS: BUILTIN_MODELS,
     getMemory: getMemory,

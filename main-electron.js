@@ -1,11 +1,38 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, safeStorage } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const fs = require('fs');
 
 // 禁用 GPU 硬件加速缓存，避免沙箱权限问题
 app.disableHardwareAcceleration();
 
 let mainWindow = null;
+
+function getKeyStorePath() {
+  return path.join(app.getPath('userData'), 'encrypted_keys.json');
+}
+
+function saveKeyStore(data) {
+  try {
+    fs.writeFileSync(getKeyStorePath(), JSON.stringify(data, null, 2));
+    return true;
+  } catch (err) {
+    console.error('保存密钥存储失败:', err);
+    return false;
+  }
+}
+
+function loadKeyStore() {
+  try {
+    if (fs.existsSync(getKeyStorePath())) {
+      const content = fs.readFileSync(getKeyStorePath(), 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.error('加载密钥存储失败:', err);
+  }
+  return {};
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -98,6 +125,40 @@ function setupAutoUpdater() {
 // IPC：手动检查更新
 ipcMain.on('check-for-updates', function() {
   autoUpdater.checkForUpdates();
+});
+
+// IPC：加密存储API密钥
+ipcMain.handle('encrypt-and-save-key', function(event, keyName, keyValue) {
+  try {
+    const keyStore = loadKeyStore();
+    if (!keyValue) {
+      delete keyStore[keyName];
+      saveKeyStore(keyStore);
+      return { success: true };
+    }
+    const encrypted = safeStorage.encryptString(keyValue);
+    keyStore[keyName] = encrypted.toString('base64');
+    saveKeyStore(keyStore);
+    return { success: true };
+  } catch (err) {
+    console.error('加密存储失败:', err);
+    return { success: false, error: '加密存储失败' };
+  }
+});
+
+// IPC：解密读取API密钥
+ipcMain.handle('decrypt-key', function(event, keyName) {
+  try {
+    const keyStore = loadKeyStore();
+    const encrypted = keyStore[keyName];
+    if (!encrypted) return { success: true, value: '' };
+    const buffer = Buffer.from(encrypted, 'base64');
+    const decrypted = safeStorage.decryptString(buffer);
+    return { success: true, value: decrypted };
+  } catch (err) {
+    console.error('解密失败:', err);
+    return { success: false, error: '解密失败', value: '' };
+  }
 });
 
 app.whenReady().then(function() {

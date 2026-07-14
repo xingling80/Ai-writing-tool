@@ -1,5 +1,6 @@
 @echo off
-setlocal
+chcp 65001 >nul 2>&1
+setlocal enabledelayedexpansion
 
 echo ========================================
 echo   AI Writing Tool - Build & Release
@@ -8,7 +9,7 @@ echo.
 
 cd /d "%~dp0"
 
-where node >nul 2>nul
+node --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found. Please install Node.js first.
     echo Download: https://nodejs.org/
@@ -17,22 +18,18 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-where npm >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ERROR] npm not found. Please reinstall Node.js.
-    echo.
-    pause
-    exit /b 1
-)
+echo [INFO] Node.js version:
+node --version
+echo.
 
 echo [Step 1/5] Configuring environment...
 set ELECTRON_CACHE=%~dp0.electron-cache
 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-set PATH=C:\Windows\System32\WindowsPowerShell\v1.0;%PATH%
+set PATH=C:\Windows\System32;C:\Windows\System32\WindowsPowerShell\v1.0;C:\Program Files\PowerShell\7;%PATH%
 
 if exist "%~dp0.env" (
-    for /f "tokens=1,* delims==" %%i in ('type "%~dp0.env"') do (
+    for /f "usebackq tokens=1,* delims==" %%i in ("%~dp0.env") do (
         if "%%i"=="GH_TOKEN" set "GH_TOKEN=%%j"
     )
     echo GitHub Token: loaded from .env
@@ -45,7 +42,8 @@ echo Choose action:
 echo   1. Build only (local test)
 echo   2. Build and release to GitHub (auto-update)
 echo.
-set /p choice="Enter choice (1/2): "
+set "choice="
+set /p "choice=Enter choice (1/2): "
 
 if "%choice%"=="1" goto :build_local
 if "%choice%"=="2" goto :build_release
@@ -76,6 +74,7 @@ echo.
 echo [Step 2/5] Cleaning old build...
 if exist "%~dp0dist" rmdir /s /q "%~dp0dist"
 echo [Step 3/5] Building and releasing to GitHub...
+set "GH_TOKEN=%GH_TOKEN%"
 call npm run release
 goto :check_result
 
